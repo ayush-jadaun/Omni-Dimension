@@ -1,6 +1,6 @@
 /**
- * Authentication Middleware
- * Current Time: 2025-06-20 05:04:25 UTC
+ * Authentication Middleware - Fixed for Consistency
+ * Current Time: 2025-06-20 09:25:12 UTC
  * Current User: ayush20244048
  */
 
@@ -16,30 +16,40 @@ const SKIP_AUTH_PATHS = [
   "/api/auth/refresh",
   "/health",
   "/system-info",
-  "/api",
+  "/api-status",
+  "/docs",
+  "/api", // Only the root /api
   "/",
 ];
 
 export const authMiddleware = async (req, res, next) => {
   try {
     // Skip authentication for public routes
-    if (
-      SKIP_AUTH_PATHS.some(
-        (path) => req.path === path || req.path.startsWith(path + "/")
-      )
-    ) {
+    if (SKIP_AUTH_PATHS.includes(req.path) || req.path === "/api") {
       return next();
     }
 
-    // Check for session ID in cookies
+    // Check for session ID in cookies - MATCH session middleware
     const sessionId = req.cookies.sessionId || req.headers["x-session-id"];
 
     if (!sessionId) {
+      logger.warn("No session ID found in request", {
+        path: req.path,
+        cookies: Object.keys(req.cookies),
+        timestamp: "2025-06-20 09:25:12",
+        currentUser: "ayush20244048",
+      });
+
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         error: "Authentication required",
         message: "No session found. Please login.",
         code: "NO_SESSION",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
+        debug: {
+          path: req.path,
+          hasCookies: Object.keys(req.cookies).length > 0,
+          cookieNames: Object.keys(req.cookies),
+        },
       });
     }
 
@@ -50,11 +60,17 @@ export const authMiddleware = async (req, res, next) => {
     }).populate("userId");
 
     if (!session) {
+      logger.warn("Invalid or expired session", {
+        sessionId: sessionId.substring(0, 10) + "...",
+        timestamp: "2025-06-20 09:25:12",
+        currentUser: "ayush20244048",
+      });
+
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         error: "Invalid session",
         message: "Session expired or invalid. Please login again.",
         code: "INVALID_SESSION",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
       });
     }
 
@@ -67,16 +83,16 @@ export const authMiddleware = async (req, res, next) => {
         error: "User not found or inactive",
         message: "Please contact support.",
         code: "USER_INACTIVE",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
       });
     }
 
-    // Update session activity
-    session.lastActivity = new Date("2025-06-20 05:04:25");
+    // Update session activity with current time
+    session.lastActivity = new Date("2025-06-20 09:25:12");
     await session.save();
 
     // Update user last activity
-    user.lastActivity = new Date("2025-06-20 05:04:25");
+    user.lastActivity = new Date("2025-06-20 09:25:12");
     await user.save();
 
     // Attach user and session to request
@@ -84,24 +100,29 @@ export const authMiddleware = async (req, res, next) => {
     req.session = session;
     req.sessionId = sessionId;
 
-    logger.debug("User authenticated", {
+    logger.debug("User authenticated successfully", {
       userId: user._id,
-      sessionId: sessionId,
-      timestamp: "2025-06-20 05:04:25",
+      username: user.username,
+      role: user.role,
+      sessionId: sessionId.substring(0, 10) + "...",
+      timestamp: "2025-06-20 09:25:12",
       currentUser: "ayush20244048",
     });
 
     next();
   } catch (error) {
-    logger.error("Authentication middleware error:", error, {
-      timestamp: "2025-06-20 05:04:25",
-      currentUser: "ayush20244048",
-    });
+    logger.error(
+      "Authentication middleware error at 2025-06-20 09:25:12:",
+      error,
+      {
+        currentUser: "ayush20244048",
+      }
+    );
     res.status(HTTP_STATUS.INTERNAL_SERVER_ERROR).json({
       error: "Authentication error",
       message: "Internal server error during authentication",
       code: "AUTH_ERROR",
-      timestamp: "2025-06-20 05:04:25",
+      timestamp: "2025-06-20 09:25:12",
     });
   }
 };
@@ -117,7 +138,7 @@ export const requireRole = (roles) => {
         error: "Authentication required",
         message: "Please login to access this resource",
         code: "NO_AUTH",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
       });
     }
 
@@ -131,20 +152,31 @@ export const requireRole = (roles) => {
     );
 
     if (!hasRequiredRole) {
-      logger.security("insufficient_permissions", "medium", {
+      logger.warn("insufficient_permissions", {
         userId: req.user._id,
         userRoles: userRoles,
         requiredRoles: requiredRoles,
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
+        currentUser: "ayush20244048",
       });
 
       return res.status(HTTP_STATUS.FORBIDDEN).json({
         error: "Insufficient permissions",
-        message: `Required role(s): ${requiredRoles.join(", ")}`,
+        message: `Required role(s): ${requiredRoles.join(
+          ", "
+        )}. Current role: ${userRoles.join(", ")}`,
         code: "INSUFFICIENT_ROLE",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
       });
     }
+
+    logger.debug("Role check passed", {
+      userId: req.user._id,
+      userRoles: userRoles,
+      requiredRoles: requiredRoles,
+      timestamp: "2025-06-20 09:25:12",
+      currentUser: "ayush20244048",
+    });
 
     next();
   };
@@ -157,7 +189,7 @@ export const requireOwnership = (resourceUserIdField = "userId") => {
       return res.status(HTTP_STATUS.UNAUTHORIZED).json({
         error: "Authentication required",
         code: "NO_AUTH",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
       });
     }
 
@@ -173,17 +205,18 @@ export const requireOwnership = (resourceUserIdField = "userId") => {
       req.query[resourceUserIdField];
 
     if (resourceUserId && resourceUserId !== req.user._id.toString()) {
-      logger.security("unauthorized_access_attempt", "medium", {
+      logger.warn("unauthorized_access_attempt", {
         userId: req.user._id,
         attemptedResource: resourceUserId,
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
+        currentUser: "ayush20244048",
       });
 
       return res.status(HTTP_STATUS.FORBIDDEN).json({
         error: "Access denied",
         message: "You can only access your own resources",
         code: "NOT_OWNER",
-        timestamp: "2025-06-20 05:04:25",
+        timestamp: "2025-06-20 09:25:12",
       });
     }
 
@@ -208,26 +241,30 @@ export const optionalAuth = async (req, res, next) => {
         req.sessionId = sessionId;
 
         // Update activity
-        session.lastActivity = new Date("2025-06-20 05:04:25");
+        session.lastActivity = new Date("2025-06-20 09:25:12");
         await session.save();
 
-        session.userId.lastActivity = new Date("2025-06-20 05:04:25");
+        session.userId.lastActivity = new Date("2025-06-20 09:25:12");
         await session.userId.save();
 
         logger.debug("Optional auth successful", {
           userId: session.userId._id,
-          sessionId: sessionId,
-          timestamp: "2025-06-20 05:04:25",
+          sessionId: sessionId.substring(0, 10) + "...",
+          timestamp: "2025-06-20 09:25:12",
+          currentUser: "ayush20244048",
         });
       }
     }
 
     next();
   } catch (error) {
-    logger.error("Optional auth middleware error:", error, {
-      timestamp: "2025-06-20 05:04:25",
-      currentUser: "ayush20244048",
-    });
+    logger.error(
+      "Optional auth middleware error at 2025-06-20 09:25:12:",
+      error,
+      {
+        currentUser: "ayush20244048",
+      }
+    );
     next(); // Continue without authentication
   }
 };

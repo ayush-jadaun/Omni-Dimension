@@ -1,6 +1,6 @@
 /**
- * Authentication Context Provider - Fixed Session Persistence
- * Current Time: 2025-06-20 09:01:25 UTC
+ * Authentication Context Provider - Fixed Session Cookie Management
+ * Current Time: 2025-06-20 09:21:52 UTC
  * Current User: ayush20244048
  */
 
@@ -11,8 +11,8 @@ import {
   useEffect,
   createContext,
   ReactNode,
+  useContext,
   useCallback,
-  useContext
 } from "react";
 import { useRouter } from "next/navigation";
 import toast from "react-hot-toast";
@@ -86,6 +86,10 @@ export interface AuthContextType {
   getDashboard: () => Promise<any>;
   hasRole: (role: string) => boolean;
   hasPermission: (permission: string) => boolean;
+  makeAuthenticatedRequest: (
+    url: string,
+    options?: RequestInit
+  ) => Promise<Response>;
 }
 
 // Create context
@@ -108,74 +112,83 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       console.log(
-        "🔍 Checking auth state at 2025-06-20 09:01:25 for ayush20244048"
+        "🔍 Checking auth state at 2025-06-20 09:21:52 for ayush20244048"
       );
 
-      // Check multiple storage keys for compatibility
-      const storedUser =
-        localStorage.getItem("auth_user") || localStorage.getItem("user");
-      const storedSessionId =
-        localStorage.getItem("sessionId") || localStorage.getItem("auth_token");
-
-      console.log("📦 Storage check at 2025-06-20 09:01:25:", {
-        hasUser: !!storedUser,
-        hasSessionId: !!storedSessionId,
-        userLength: storedUser?.length,
-        sessionLength: storedSessionId?.length,
-        currentUser: "ayush20244048",
+      // First, try to validate session with backend
+      const response = await fetch("http://localhost:8000/api/auth/me", {
+        method: "GET",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        credentials: "include", // Include cookies automatically
       });
 
-      if (storedUser && storedSessionId) {
-        try {
-          // Parse and validate stored user data
-          const userData = JSON.parse(storedUser);
+      if (response.ok) {
+        const responseData = await response.json();
+        if (responseData.success && responseData.user) {
+          const userData = responseData.user;
 
-          // Enhanced validation
-          if (
-            userData &&
-            userData._id &&
-            userData.email &&
-            userData.username &&
-            typeof userData === "object"
-          ) {
-            // Set user immediately to prevent logout during refresh
-            setUser(userData);
-            console.log(
-              "✅ User restored from localStorage at 2025-06-20 09:01:25:",
-              {
-                username: userData.username,
-                email: userData.email,
-                role: userData.role,
-                sessionId: storedSessionId.substring(0, 10) + "...",
-                currentUser: "ayush20244048",
-              }
-            );
+          // Store user data
+          localStorage.setItem("auth_user", JSON.stringify(userData));
+          localStorage.setItem("user", JSON.stringify(userData));
+          setUser(userData);
 
-            // Skip background validation for now to prevent logout
-            // validateSessionInBackground(storedSessionId, userData);
-          } else {
-            console.warn(
-              "⚠️ Invalid user data structure at 2025-06-20 09:01:25:",
-              userData
-            );
-            throw new Error("Invalid user data structure");
+          console.log("✅ Active session found at 2025-06-20 09:21:52:", {
+            username: userData.username,
+            email: userData.email,
+            role: userData.role,
+            sessionId: responseData.session?.sessionId,
+            currentUser: "ayush20244048",
+          });
+        }
+      } else if (response.status === 401) {
+        console.log("📭 No active session found at 2025-06-20 09:21:52");
+
+        // Try to restore from localStorage as fallback
+        const storedUser =
+          localStorage.getItem("auth_user") || localStorage.getItem("user");
+
+        if (storedUser) {
+          try {
+            const userData = JSON.parse(storedUser);
+            if (
+              userData &&
+              userData._id &&
+              userData.email &&
+              userData.username
+            ) {
+              console.log("⚠️ Using cached user data (session may be expired)");
+              setUser(userData);
+            }
+          } catch (e) {
+            clearAuthData();
           }
-        } catch (parseError) {
-          console.error(
-            "❌ Failed to parse stored user data at 2025-06-20 09:01:25:",
-            parseError
-          );
-          clearAuthData();
         }
       } else {
-        console.log("📭 No stored session found at 2025-06-20 09:01:25");
+        console.error("❌ Auth check failed with status:", response.status);
+        clearAuthData();
       }
     } catch (error) {
       console.error(
-        "❌ Auth state check failed at 2025-06-20 09:01:25:",
+        "❌ Network error during auth check at 2025-06-20 09:21:52:",
         error
       );
-      // Don't clear auth data on error, just log it
+
+      // Fallback to localStorage if network fails
+      const storedUser =
+        localStorage.getItem("auth_user") || localStorage.getItem("user");
+      if (storedUser) {
+        try {
+          const userData = JSON.parse(storedUser);
+          if (userData && userData._id && userData.email && userData.username) {
+            console.log("📦 Using cached user data due to network error");
+            setUser(userData);
+          }
+        } catch (e) {
+          clearAuthData();
+        }
+      }
     } finally {
       setIsLoading(false);
     }
@@ -183,7 +196,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   // Clear authentication data
   const clearAuthData = () => {
-    console.log("🧹 Clearing auth data at 2025-06-20 09:01:25");
+    console.log("🧹 Clearing auth data at 2025-06-20 09:21:52");
     localStorage.removeItem("auth_user");
     localStorage.removeItem("user");
     localStorage.removeItem("sessionId");
@@ -191,13 +204,48 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     setUser(null);
   };
 
-  // Login function with better error handling
+  // Make authenticated request helper
+  const makeAuthenticatedRequest = useCallback(
+    async (url: string, options: RequestInit = {}): Promise<Response> => {
+      const config: RequestInit = {
+        ...options,
+        credentials: "include", // Always include cookies
+        headers: {
+          "Content-Type": "application/json",
+          ...options.headers,
+        },
+      };
+
+      console.log(
+        "🌐 Making authenticated request to:",
+        url,
+        "at 2025-06-20 09:21:52"
+      );
+
+      const response = await fetch(url, config);
+
+      // If we get 401, the session might be expired
+      if (response.status === 401) {
+        console.warn(
+          "⚠️ Received 401 for request to:",
+          url,
+          "at 2025-06-20 09:21:52"
+        );
+        // Don't auto-logout, let the component handle it
+      }
+
+      return response;
+    },
+    []
+  );
+
+  // Login function with better session handling
   const login = useCallback(
     async (credentials: LoginRequest): Promise<boolean> => {
       try {
         setIsLoading(true);
 
-        console.log("🔑 Login attempt at 2025-06-20 09:01:25:", {
+        console.log("🔑 Login attempt at 2025-06-20 09:21:52:", {
           email: credentials.email,
           rememberMe: credentials.rememberMe,
           currentUser: "ayush20244048",
@@ -209,7 +257,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             "Content-Type": "application/json",
             Accept: "application/json",
           },
-          credentials: "include",
+          credentials: "include", // Include cookies
           body: JSON.stringify({
             email: credentials.email,
             password: credentials.password,
@@ -220,12 +268,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               browser: navigator.userAgent.includes("Chrome")
                 ? "Chrome"
                 : "Other",
-              timestamp: "2025-06-20 09:01:25",
+              timestamp: "2025-06-20 09:21:52",
             },
           }),
         });
 
-        console.log("📥 Login response at 2025-06-20 09:01:25:", {
+        console.log("📥 Login response at 2025-06-20 09:21:52:", {
           status: response.status,
           statusText: response.statusText,
           ok: response.ok,
@@ -237,7 +285,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             const errorData = await response.json();
             errorMessage = errorData.message || errorData.error || errorMessage;
             console.error(
-              "❌ Login API error at 2025-06-20 09:01:25:",
+              "❌ Login API error at 2025-06-20 09:21:52:",
               errorData
             );
           } catch (e) {
@@ -258,52 +306,40 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const responseData = await response.json();
         console.log(
-          "📥 Login response data keys at 2025-06-20 09:01:25:",
+          "📥 Login response data keys at 2025-06-20 09:21:52:",
           Object.keys(responseData)
         );
 
-        // Enhanced response parsing with multiple fallbacks
+        // Parse response data
         let userData = null;
-        let sessionId = null;
+        let sessionData = null;
 
-        // Try different response structures
-        if (responseData.success && responseData.user && responseData.session) {
+        if (responseData.success && responseData.user) {
           userData = responseData.user;
-          sessionId = responseData.session.sessionId;
-        } else if (responseData.user && responseData.sessionId) {
-          userData = responseData.user;
-          sessionId = responseData.sessionId;
-        } else if (responseData.data) {
-          userData = responseData.data.user;
-          sessionId =
-            responseData.data.session?.sessionId || responseData.data.sessionId;
-        } else if (responseData.user) {
-          userData = responseData.user;
-          sessionId = responseData.token || responseData.session?.sessionId;
+          sessionData = responseData.session;
         }
 
-        if (!userData || !sessionId) {
+        if (!userData) {
           console.error(
-            "❌ Invalid response structure at 2025-06-20 09:01:25:",
+            "❌ Invalid response structure at 2025-06-20 09:21:52:",
             responseData
           );
-          throw new Error(
-            "Invalid response from server - missing user data or session"
-          );
+          throw new Error("Invalid response from server - missing user data");
         }
 
-        // Store auth data with multiple keys for redundancy
-        console.log("💾 Storing auth data at 2025-06-20 09:01:25:", {
+        // Store auth data
+        console.log("💾 Storing auth data at 2025-06-20 09:21:52:", {
           username: userData.username,
-          sessionId: sessionId.substring(0, 10) + "...",
-          timestamp: "2025-06-20 09:01:25",
+          sessionId: sessionData?.sessionId,
+          timestamp: "2025-06-20 09:21:52",
         });
 
-        // Store in multiple keys for compatibility
         localStorage.setItem("auth_user", JSON.stringify(userData));
         localStorage.setItem("user", JSON.stringify(userData));
-        localStorage.setItem("sessionId", sessionId);
-        localStorage.setItem("auth_token", sessionId);
+        if (sessionData?.sessionId) {
+          localStorage.setItem("sessionId", sessionData.sessionId);
+          localStorage.setItem("auth_token", sessionData.sessionId);
+        }
 
         setUser(userData);
 
@@ -317,7 +353,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           }
         );
 
-        console.log("✅ Login successful at 2025-06-20 09:01:25:", {
+        console.log("✅ Login successful at 2025-06-20 09:21:52:", {
           username: userData.username,
           email: userData.email,
           role: userData.role,
@@ -325,7 +361,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return true;
       } catch (error: any) {
-        console.error("❌ Login error at 2025-06-20 09:01:25:", error);
+        console.error("❌ Login error at 2025-06-20 09:21:52:", error);
         toast.error(
           error.message || "Login failed. Please check your credentials."
         );
@@ -343,7 +379,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       try {
         setIsLoading(true);
 
-        console.log("📝 Registration attempt at 2025-06-20 09:01:25:", {
+        console.log("📝 Registration attempt at 2025-06-20 09:21:52:", {
           username: userData.username,
           email: userData.email,
           firstName: userData.firstName,
@@ -383,15 +419,16 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         const responseData = await response.json();
 
-        if (responseData.success && responseData.user && responseData.session) {
+        if (responseData.success && responseData.user) {
           const newUser = responseData.user;
-          const sessionId = responseData.session.sessionId;
+          const sessionData = responseData.session;
 
-          // Store with multiple keys
           localStorage.setItem("auth_user", JSON.stringify(newUser));
           localStorage.setItem("user", JSON.stringify(newUser));
-          localStorage.setItem("sessionId", sessionId);
-          localStorage.setItem("auth_token", sessionId);
+          if (sessionData?.sessionId) {
+            localStorage.setItem("sessionId", sessionData.sessionId);
+            localStorage.setItem("auth_token", sessionData.sessionId);
+          }
 
           setUser(newUser);
 
@@ -405,13 +442,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
             }
           );
 
-          console.log("✅ Registration successful at 2025-06-20 09:01:25");
+          console.log("✅ Registration successful at 2025-06-20 09:21:52");
           return true;
         } else {
           throw new Error("Invalid response from server");
         }
       } catch (error: any) {
-        console.error("❌ Registration error at 2025-06-20 09:01:25:", error);
+        console.error("❌ Registration error at 2025-06-20 09:21:52:", error);
         toast.error(error.message || "Registration failed. Please try again.");
         return false;
       } finally {
@@ -424,18 +461,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // Logout function
   const logout = useCallback(async (): Promise<void> => {
     try {
-      const sessionId =
-        localStorage.getItem("sessionId") || localStorage.getItem("auth_token");
-
-      if (sessionId) {
-        await fetch("http://localhost:8000/api/auth/logout", {
-          method: "POST",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        });
-      }
+      await makeAuthenticatedRequest("http://localhost:8000/api/auth/logout", {
+        method: "POST",
+      });
     } catch (error) {
       console.error("❌ Logout API error:", error);
     } finally {
@@ -443,33 +471,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
       toast.success("Logged out successfully");
       console.log(
-        "✅ Logout successful at 2025-06-20 09:01:25 for ayush20244048"
+        "✅ Logout successful at 2025-06-20 09:21:52 for ayush20244048"
       );
 
       router.push("/login");
     }
-  }, [router]);
+  }, [router, makeAuthenticatedRequest]);
 
-  // Refresh user data (optional, non-blocking)
+  // Refresh user data
   const refreshUser = useCallback(async (): Promise<void> => {
     try {
-      const sessionId =
-        localStorage.getItem("sessionId") || localStorage.getItem("auth_token");
-
-      if (!sessionId || !user) {
-        console.log(
-          "📝 Skipping refresh - no session or user at 2025-06-20 09:01:25"
-        );
-        return;
-      }
-
-      const response = await fetch("http://localhost:8000/api/auth/me", {
-        method: "GET",
-        headers: {
-          "Content-Type": "application/json",
-        },
-        credentials: "include",
-      });
+      const response = await makeAuthenticatedRequest(
+        "http://localhost:8000/api/auth/me"
+      );
 
       if (response.ok) {
         const responseData = await response.json();
@@ -478,34 +492,28 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           localStorage.setItem("auth_user", JSON.stringify(responseData.user));
           localStorage.setItem("user", JSON.stringify(responseData.user));
           setUser(responseData.user);
-          console.log("✅ User data refreshed at 2025-06-20 09:01:25");
+          console.log("✅ User data refreshed at 2025-06-20 09:21:52");
         }
       } else if (response.status === 401) {
         console.warn(
-          "⚠️ Session expired during manual refresh at 2025-06-20 09:01:25"
+          "⚠️ Session expired during refresh at 2025-06-20 09:21:52"
         );
-        // Don't logout automatically, let user continue
+        clearAuthData();
+        router.push("/login");
       }
     } catch (error: any) {
-      console.log(
-        "📝 Refresh user error (non-critical) at 2025-06-20 09:01:25:",
-        error
-      );
+      console.error("❌ Refresh user error at 2025-06-20 09:21:52:", error);
     }
-  }, [user]);
+  }, [router, makeAuthenticatedRequest]);
 
-  // Other methods remain similar but with updated timestamps...
+  // Update profile
   const updateProfile = useCallback(
     async (profileData: Partial<User["profile"]>): Promise<boolean> => {
       try {
-        const response = await fetch(
+        const response = await makeAuthenticatedRequest(
           "http://localhost:8000/api/users/profile",
           {
             method: "PUT",
-            headers: {
-              "Content-Type": "application/json",
-            },
-            credentials: "include",
             body: JSON.stringify(profileData),
           }
         );
@@ -524,7 +532,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
           toast.success("Profile updated successfully! ✅");
           console.log(
-            "✅ Profile updated at 2025-06-20 09:01:25 for ayush20244048"
+            "✅ Profile updated at 2025-06-20 09:21:52 for ayush20244048"
           );
 
           return true;
@@ -532,25 +540,19 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return false;
       } catch (error: any) {
-        console.error("❌ Update profile error at 2025-06-20 09:01:25:", error);
+        console.error("❌ Update profile error at 2025-06-20 09:21:52:", error);
         toast.error(error.message || "Failed to update profile");
         return false;
       }
     },
-    [user]
+    [user, makeAuthenticatedRequest]
   );
 
+  // Get dashboard
   const getDashboard = useCallback(async () => {
     try {
-      const response = await fetch(
-        "http://localhost:8000/api/users/dashboard",
-        {
-          method: "GET",
-          headers: {
-            "Content-Type": "application/json",
-          },
-          credentials: "include",
-        }
+      const response = await makeAuthenticatedRequest(
+        "http://localhost:8000/api/users/dashboard"
       );
 
       if (!response.ok) {
@@ -560,11 +562,12 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       const responseData = await response.json();
       return responseData.success ? responseData.dashboard : null;
     } catch (error: any) {
-      console.error("❌ Get dashboard error at 2025-06-20 09:01:25:", error);
+      console.error("❌ Get dashboard error at 2025-06-20 09:21:52:", error);
       return null;
     }
-  }, []);
+  }, [makeAuthenticatedRequest]);
 
+  // Role and permission helpers
   const hasRole = useCallback(
     (role: string): boolean => {
       if (!user) return false;
@@ -596,6 +599,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     getDashboard,
     hasRole,
     hasPermission,
+    makeAuthenticatedRequest,
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
