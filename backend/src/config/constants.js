@@ -63,11 +63,20 @@ export const HTTP_STATUS = {
   };
   
   export const REDIS_CHANNELS = {
-    ORCHESTRATOR: 'orchestrator:main',
-    AGENTS: 'agents:broadcast',
-    WORKFLOWS: 'workflows:updates',
-    SESSIONS: 'sessions:updates',
-    WEBSOCKET: 'websocket:broadcast'
+    ORCHESTRATOR: "orchestrator:main",
+    TASKS: "tasks",
+    TASK_RESULTS: "task_results", // This
+    AGENTS: "agents:broadcast",
+    WORKFLOWS: "workflows:updates",
+    SESSIONS: "sessions:updates",
+    WEBSOCKET: "websocket:broadcast",
+    NOTIFICATIONS: "notifications",
+    SYSTEM: "system",
+    ORCHESTRATOR: "orchestrator",
+    NLP: "agent:nlp",
+    SEARCH: "agent:search",
+    OMNIDIMENSION: "agent:omnidimension",
+    MONITORING: "agent:monitoring",
   };
   
   export const RATE_LIMITS = {
