@@ -1,6 +1,6 @@
 /**
- * Gemini Tool - Fixed JSON Response Parsing
- * Current Date and Time: 2025-06-20 12:20:14 UTC
+ * Gemini Tool - Debug and Fix JSON Response Issue
+ * Current Date and Time: 2025-06-20 12:23:20 UTC
  * Current User: ayush20244048
  */
 
@@ -18,24 +18,13 @@ export class GeminiTool extends Tool {
       - Natural language generation
       - Text analysis and understanding
       - Content generation and summarization
-      
-      Input should be a JSON string with:
-      {
-        "task": "intent_parsing|text_generation|analysis",
-        "prompt": "The main prompt text",
-        "context": "Additional context (optional)",
-        "parameters": {
-          "temperature": 0.7,
-          "maxTokens": 1000
-        }
-      }
     `;
     this.model = createGeminiModel();
   }
 
   async _call(input) {
     try {
-      logger.info(`🤖 Gemini tool called at 2025-06-20 12:20:14`, {
+      logger.info(`🤖 Gemini tool called at 2025-06-20 12:23:20`, {
         inputLength: input?.length,
         currentUser: "ayush20244048",
       });
@@ -61,9 +50,10 @@ export class GeminiTool extends Tool {
           fullPrompt = prompt;
       }
 
-      logger.debug(`🚀 Sending to Gemini at 2025-06-20 12:20:14:`, {
+      logger.debug(`📤 Sending to Gemini at 2025-06-20 12:23:20:`, {
         task,
         promptLength: fullPrompt.length,
+        promptPreview: fullPrompt.substring(0, 200),
         currentUser: "ayush20244048",
       });
 
@@ -71,23 +61,30 @@ export class GeminiTool extends Tool {
       const response = await result.response;
       let rawText = response.text();
 
-      logger.debug(`📥 Raw Gemini response at 2025-06-20 12:20:14:`, {
-        rawTextLength: rawText?.length,
-        rawTextPreview: rawText?.substring(0, 200),
+      // ENHANCED DEBUGGING: Log the exact raw response
+      logger.info(`📥 Raw Gemini response at 2025-06-20 12:23:20:`, {
         task,
+        rawTextLength: rawText?.length,
+        rawTextType: typeof rawText,
+        rawTextFull: rawText, // LOG THE FULL RESPONSE TO SEE WHAT'S WRONG
+        hasNewlines: rawText?.includes("\n"),
+        hasMarkdown: rawText?.includes("```"),
+        startsWithBrace: rawText?.trim().startsWith("{"),
+        endsWithBrace: rawText?.trim().endsWith("}"),
         currentUser: "ayush20244048",
       });
 
-      // FIXED: Clean and parse the response properly
-      const cleanedResponse = this.cleanAndParseResponse(rawText, task);
+      // FIXED: More aggressive cleaning and parsing
+      const cleanedResponse = this.aggressiveCleanAndParse(rawText, task);
 
-      logger.info(`✅ Gemini tool completed at 2025-06-20 12:20:14:`, {
+      logger.info(`✅ Gemini response processed at 2025-06-20 12:23:20:`, {
         task,
         success: true,
-        responseLength:
-          typeof cleanedResponse === "string"
-            ? cleanedResponse.length
-            : JSON.stringify(cleanedResponse).length,
+        cleanedType: typeof cleanedResponse,
+        cleanedKeys:
+          typeof cleanedResponse === "object"
+            ? Object.keys(cleanedResponse)
+            : "N/A",
         currentUser: "ayush20244048",
       });
 
@@ -96,13 +93,14 @@ export class GeminiTool extends Tool {
         task,
         result: cleanedResponse,
         metadata: {
-          timestamp: "2025-06-20 12:20:14",
+          timestamp: "2025-06-20 12:23:20",
           tokensUsed: this.estimateTokens(fullPrompt + rawText),
           currentUser: "ayush20244048",
+          processingMethod: "aggressive_clean",
         },
       });
     } catch (error) {
-      logger.error(`❌ Gemini tool error at 2025-06-20 12:20:14:`, {
+      logger.error(`❌ Gemini tool error at 2025-06-20 12:23:20:`, {
         error: error.message,
         stack: error.stack,
         currentUser: "ayush20244048",
@@ -111,18 +109,18 @@ export class GeminiTool extends Tool {
       return JSON.stringify({
         success: false,
         error: error.message,
-        timestamp: "2025-06-20 12:20:14",
+        timestamp: "2025-06-20 12:23:20",
         currentUser: "ayush20244048",
       });
     }
   }
 
   /**
-   * Clean and parse Gemini response - FIXED: Handle various response formats
+   * AGGRESSIVE cleaning and parsing - handles all edge cases
    */
-  cleanAndParseResponse(rawText, task) {
+  aggressiveCleanAndParse(rawText, task) {
     if (!rawText || typeof rawText !== "string") {
-      logger.warn(`⚠️ Invalid rawText at 2025-06-20 12:20:14:`, {
+      logger.warn(`⚠️ Invalid rawText at 2025-06-20 12:23:20:`, {
         rawText,
         type: typeof rawText,
         currentUser: "ayush20244048",
@@ -131,49 +129,55 @@ export class GeminiTool extends Tool {
     }
 
     try {
-      // Remove common markdown formatting
-      let cleanText = rawText
-        .replace(/```json\s*/gi, "")
-        .replace(/```\s*/gi, "")
-        .replace(/^\s*```[\s\S]*?```\s*/gm, "")
-        .trim();
-
-      logger.debug(`🧹 Cleaned text at 2025-06-20 12:20:14:`, {
+      logger.debug(`🧹 Starting aggressive clean at 2025-06-20 12:23:20:`, {
         originalLength: rawText.length,
-        cleanedLength: cleanText.length,
-        cleanedPreview: cleanText.substring(0, 200),
+        originalPreview: rawText.substring(0, 100),
         currentUser: "ayush20244048",
       });
 
-      // For structured tasks, try to extract JSON
+      // Step 1: Remove ALL markdown formatting
+      let cleaned = rawText
+        .replace(/```json\s*/gi, "") // Remove ```json
+        .replace(/```javascript\s*/gi, "") // Remove ```javascript
+        .replace(/```\s*/gi, "") // Remove remaining ```
+        .replace(/^```[\s\S]*?```$/gm, "") // Remove entire code blocks
+        .replace(/`/g, "") // Remove all backticks
+        .trim();
+
+      logger.debug(`🧹 After markdown removal at 2025-06-20 12:23:20:`, {
+        cleanedLength: cleaned.length,
+        cleanedPreview: cleaned.substring(0, 100),
+        currentUser: "ayush20244048",
+      });
+
+      // Step 2: Extract JSON object more aggressively
       if (
         task === "intent_parsing" ||
         task === "analysis" ||
         task === "entity_extraction"
       ) {
-        return this.extractStructuredResponse(cleanText, task);
+        return this.extractJSONAggressively(cleaned, task);
       }
 
-      // For text generation, return the cleaned text directly
+      // Step 3: For text generation, extract the actual text content
       if (task === "text_generation") {
-        return this.extractTextResponse(cleanText);
+        return this.extractTextContentAggressively(cleaned);
       }
 
-      // Default: try to parse as JSON, fallback to text
+      // Step 4: Last resort - try direct JSON parse
       try {
-        return JSON.parse(cleanText);
-      } catch (jsonError) {
-        logger.debug(
-          `📝 Returning as text at 2025-06-20 12:20:14 (JSON parse failed):`,
-          {
-            error: jsonError.message,
-            currentUser: "ayush20244048",
-          }
-        );
-        return cleanText;
+        const parsed = JSON.parse(cleaned);
+        logger.info(`✅ Direct JSON parse successful at 2025-06-20 12:23:20`);
+        return parsed;
+      } catch (directParseError) {
+        logger.warn(`⚠️ Direct JSON parse failed at 2025-06-20 12:23:20:`, {
+          error: directParseError.message,
+          currentUser: "ayush20244048",
+        });
+        return this.getFallbackResponse(task);
       }
     } catch (error) {
-      logger.error(`❌ Response cleaning failed at 2025-06-20 12:20:14:`, {
+      logger.error(`❌ Aggressive cleaning failed at 2025-06-20 12:23:20:`, {
         error: error.message,
         task,
         currentUser: "ayush20244048",
@@ -183,60 +187,110 @@ export class GeminiTool extends Tool {
   }
 
   /**
-   * Extract structured response for intent parsing and analysis
+   * Extract JSON with multiple strategies
    */
-  extractStructuredResponse(text, task) {
+  extractJSONAggressively(text, task) {
     try {
-      // Look for JSON object in the text
-      const jsonMatch = text.match(/\{[\s\S]*\}/);
-      if (jsonMatch) {
-        const jsonStr = jsonMatch[0];
-        logger.debug(`🔍 Found JSON match at 2025-06-20 12:20:14:`, {
-          jsonStr: jsonStr.substring(0, 200),
-          currentUser: "ayush20244048",
-        });
+      // Strategy 1: Find complete JSON object
+      const jsonRegex = /\{(?:[^{}]|{(?:[^{}]|{[^{}]*})*})*\}/g;
+      const jsonMatches = text.match(jsonRegex);
 
-        try {
-          return JSON.parse(jsonStr);
-        } catch (parseError) {
-          logger.warn(`⚠️ JSON parse error at 2025-06-20 12:20:14:`, {
-            error: parseError.message,
-            jsonStr: jsonStr.substring(0, 100),
-            currentUser: "ayush20244048",
-          });
+      if (jsonMatches && jsonMatches.length > 0) {
+        // Try each JSON match until one parses successfully
+        for (let i = 0; i < jsonMatches.length; i++) {
+          try {
+            const jsonStr = jsonMatches[i];
+            logger.debug(
+              `🔍 Trying JSON match ${i + 1} at 2025-06-20 12:23:20:`,
+              {
+                jsonStr: jsonStr.substring(0, 200),
+                currentUser: "ayush20244048",
+              }
+            );
+
+            const parsed = JSON.parse(jsonStr);
+
+            // Validate it has expected fields for intent parsing
+            if (task === "intent_parsing") {
+              if (parsed.intent || parsed.workflow_type) {
+                logger.info(
+                  `✅ Valid intent JSON found at 2025-06-20 12:23:20`
+                );
+                return this.validateIntentResponse(parsed);
+              }
+            } else {
+              logger.info(`✅ Valid JSON found at 2025-06-20 12:23:20`);
+              return parsed;
+            }
+          } catch (parseError) {
+            logger.debug(
+              `⚠️ JSON match ${i + 1} parse failed:`,
+              parseError.message
+            );
+            continue;
+          }
         }
       }
 
-      // If no JSON found, try to manually extract for intent parsing
+      // Strategy 2: Try to fix common JSON issues
+      const fixedText = this.fixCommonJSONIssues(text);
+      try {
+        const parsed = JSON.parse(fixedText);
+        logger.info(`✅ Fixed JSON parse successful at 2025-06-20 12:23:20`);
+        return task === "intent_parsing"
+          ? this.validateIntentResponse(parsed)
+          : parsed;
+      } catch (fixedParseError) {
+        logger.debug(`⚠️ Fixed JSON parse failed:`, fixedParseError.message);
+      }
+
+      // Strategy 3: Manual extraction for intent parsing
       if (task === "intent_parsing") {
         return this.manualIntentExtraction(text);
       }
 
-      // Fallback to default response
+      // Strategy 4: Fallback
+      logger.warn(
+        `⚠️ All JSON extraction strategies failed at 2025-06-20 12:23:20`
+      );
       return this.getFallbackResponse(task);
     } catch (error) {
-      logger.error(`❌ Structured extraction failed at 2025-06-20 12:20:14:`, {
-        error: error.message,
-        task,
-        currentUser: "ayush20244048",
-      });
+      logger.error(`❌ JSON extraction failed at 2025-06-20 12:23:20:`, error);
       return this.getFallbackResponse(task);
     }
   }
 
   /**
-   * Extract text response for generation tasks
+   * Fix common JSON formatting issues
    */
-  extractTextResponse(text) {
-    // Remove any remaining JSON artifacts
+  fixCommonJSONIssues(text) {
+    return (
+      text
+        // Fix missing quotes around keys
+        .replace(/(\w+)(\s*:\s*)/g, '"$1"$2')
+        // Fix single quotes to double quotes
+        .replace(/'/g, '"')
+        // Fix trailing commas
+        .replace(/,(\s*[}\]])/g, "$1")
+        // Fix missing commas between objects
+        .replace(/}(\s*{)/g, "},$1")
+        // Remove any leading/trailing non-JSON content
+        .replace(/^[^{]*/, "")
+        .replace(/[^}]*$/, "")
+    );
+  }
+
+  /**
+   * Extract text content from generation responses
+   */
+  extractTextContentAggressively(text) {
+    // Remove common prefixes
     let cleanText = text
-      .replace(/^Response:\s*/i, "")
-      .replace(/^Generated text:\s*/i, "")
-      .replace(/^Answer:\s*/i, "")
-      .replace(/^Here is.*?:\s*/i, "")
+      .replace(/^(Response|Answer|Generated text|Here is|Here's):\s*/i, "")
+      .replace(/^(The response is|My response is):\s*/i, "")
       .trim();
 
-    // If it looks like JSON, try to extract the response field
+    // If it looks like JSON, try to extract text field
     if (cleanText.startsWith("{") && cleanText.endsWith("}")) {
       try {
         const parsed = JSON.parse(cleanText);
@@ -249,6 +303,12 @@ export class GeminiTool extends Tool {
       }
     }
 
+    // Clean up any remaining artifacts
+    cleanText = cleanText
+      .replace(/^["']|["']$/g, "") // Remove quotes at start/end
+      .replace(/\\n/g, "\n") // Fix escaped newlines
+      .trim();
+
     return (
       cleanText ||
       "I understand you need help. Could you please provide more details?"
@@ -256,52 +316,131 @@ export class GeminiTool extends Tool {
   }
 
   /**
-   * Manual intent extraction when JSON parsing fails
+   * Validate and fix intent parsing response
+   */
+  validateIntentResponse(response) {
+    const validated = {
+      intent: response.intent || "general_inquiry",
+      confidence: this.validateConfidence(response.confidence),
+      entities: response.entities || {},
+      workflow_type:
+        response.workflow_type || this.inferWorkflowType(response.intent),
+      suggested_actions: Array.isArray(response.suggested_actions)
+        ? response.suggested_actions
+        : ["process_request"],
+      context_updates: response.context_updates || {},
+    };
+
+    logger.debug(`✅ Intent response validated at 2025-06-20 12:23:20:`, {
+      originalKeys: Object.keys(response),
+      validatedKeys: Object.keys(validated),
+      currentUser: "ayush20244048",
+    });
+
+    return validated;
+  }
+
+  /**
+   * Validate confidence score
+   */
+  validateConfidence(confidence) {
+    if (typeof confidence === "number" && confidence >= 0 && confidence <= 1) {
+      return confidence;
+    }
+    if (typeof confidence === "string") {
+      const parsed = parseFloat(confidence);
+      if (!isNaN(parsed) && parsed >= 0 && parsed <= 1) {
+        return parsed;
+      }
+    }
+    return 0.6; // Default confidence
+  }
+
+  /**
+   * Infer workflow type from intent
+   */
+  inferWorkflowType(intent) {
+    switch (intent) {
+      case "book_appointment":
+      case "schedule_appointment":
+        return "appointment";
+      case "find_restaurant":
+      case "make_reservation":
+        return "restaurant";
+      case "general_inquiry":
+      case "get_information":
+        return "general_query";
+      default:
+        return "custom";
+    }
+  }
+
+  /**
+   * Manual intent extraction when all else fails
    */
   manualIntentExtraction(text) {
     const lowerText = text.toLowerCase();
 
-    // Try to extract intent manually
     let intent = "general_inquiry";
-    if (lowerText.includes("book") || lowerText.includes("appointment")) {
+    let confidence = 0.6;
+    let workflow_type = "general_query";
+
+    // Intent detection patterns
+    if (
+      lowerText.includes("book") ||
+      lowerText.includes("appointment") ||
+      lowerText.includes("schedule")
+    ) {
       intent = "book_appointment";
+      workflow_type = "appointment";
+      confidence = 0.7;
     } else if (
       lowerText.includes("restaurant") ||
-      lowerText.includes("reservation")
+      lowerText.includes("reservation") ||
+      lowerText.includes("table")
     ) {
       intent = "find_restaurant";
+      workflow_type = "restaurant";
+      confidence = 0.7;
     } else if (lowerText.includes("cancel")) {
       intent = "cancel_booking";
+      workflow_type = "custom";
+      confidence = 0.8;
     }
 
-    // Try to extract confidence
-    let confidence = 0.6;
-    const confMatch = text.match(/confidence["\s:]*(\d*\.?\d+)/i);
-    if (confMatch) {
-      confidence = Math.min(1, Math.max(0, parseFloat(confMatch[1])));
-    }
+    // Basic entity extraction
+    const entities = {};
 
-    // Determine workflow type
-    let workflow_type = "general_query";
-    if (intent === "book_appointment") workflow_type = "appointment";
-    else if (intent === "find_restaurant") workflow_type = "restaurant";
+    // Extract phone numbers
+    const phoneMatch = text.match(/\b\d{3}[-.]?\d{3}[-.]?\d{4}\b/);
+    if (phoneMatch) entities.phone = phoneMatch[0];
 
-    logger.info(`🔧 Manual intent extraction at 2025-06-20 12:20:14:`, {
-      intent,
-      confidence,
-      workflow_type,
-      currentUser: "ayush20244048",
-    });
+    // Extract email
+    const emailMatch = text.match(
+      /\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b/
+    );
+    if (emailMatch) entities.email = emailMatch[0];
+
+    logger.info(
+      `🔧 Manual intent extraction completed at 2025-06-20 12:23:20:`,
+      {
+        intent,
+        confidence,
+        workflow_type,
+        entitiesFound: Object.keys(entities).length,
+        currentUser: "ayush20244048",
+      }
+    );
 
     return {
       intent,
       confidence,
-      entities: {},
+      entities,
       workflow_type,
       suggested_actions: [`process_${workflow_type}_request`],
       context_updates: {},
       extraction_method: "manual",
-      timestamp: "2025-06-20 12:20:14",
+      timestamp: "2025-06-20 12:23:20",
     };
   }
 
@@ -319,7 +458,7 @@ export class GeminiTool extends Tool {
           suggested_actions: ["process_general_request"],
           context_updates: {},
           fallback: true,
-          timestamp: "2025-06-20 12:20:14",
+          timestamp: "2025-06-20 12:23:20",
         };
 
       case "entity_extraction":
@@ -334,7 +473,7 @@ export class GeminiTool extends Tool {
           confidence: 0.5,
           themes: [],
           fallback: true,
-          timestamp: "2025-06-20 12:20:14",
+          timestamp: "2025-06-20 12:23:20",
         };
 
       default:
@@ -342,69 +481,40 @@ export class GeminiTool extends Tool {
           success: false,
           error: "Unable to process request",
           fallback: true,
-          timestamp: "2025-06-20 12:20:14",
+          timestamp: "2025-06-20 12:23:20",
         };
     }
   }
 
   buildIntentParsingPrompt(userInput, context = "") {
     return `
-You are an AI assistant that analyzes user requests and extracts intent and entities.
+IMPORTANT: You must respond with ONLY a valid JSON object. No explanations, no markdown formatting, no code blocks.
 
+Analyze this user request:
 User Input: "${userInput}"
-${context ? `Additional Context: ${context}` : ""}
+${context ? `Context: ${context}` : ""}
 
-Analyze this request and respond with ONLY a valid JSON object (no markdown, no explanations):
+Respond with this exact JSON structure:
+{"intent":"book_appointment","confidence":0.95,"entities":{"service_type":"dentist","location":"downtown"},"workflow_type":"appointment","suggested_actions":["search_providers"],"context_updates":{}}
 
-{
-  "intent": "book_appointment|find_restaurant|make_reservation|general_inquiry|modify_booking|cancel_booking",
-  "confidence": 0.95,
-  "entities": {
-    "service_type": "type of service requested",
-    "location": "any location mentioned", 
-    "date_time": "any date or time mentioned",
-    "preferences": "user preferences or requirements",
-    "contact_info": {
-      "name": "person name if mentioned",
-      "phone": "phone number if mentioned",
-      "email": "email if mentioned"
-    },
-    "party_size": "number of people if mentioned",
-    "cuisine_type": "food type if restaurant related"
-  },
-  "workflow_type": "appointment|restaurant|general_query|custom",
-  "suggested_actions": ["next_steps_for_system"],
-  "context_updates": {}
-}
+Valid intents: book_appointment, find_restaurant, make_reservation, general_inquiry, modify_booking, cancel_booking
+Valid workflow_types: appointment, restaurant, general_query, custom
 
-IMPORTANT: 
-- Return ONLY the JSON object
-- No markdown formatting
-- No explanations before or after
-- Ensure all fields are present
-- Use appropriate intent based on user request
-- Extract entities that are clearly mentioned in the input
-
-Current time: 2025-06-20 12:20:14 UTC
+Current time: 2025-06-20 12:23:20 UTC
 Current user: ayush20244048
+
+JSON Response:
     `;
   }
 
   buildTextGenerationPrompt(request, context = "") {
     return `
-Generate a helpful, natural response for this user request:
-
-User Request: ${request}
+Generate a helpful response for: ${request}
 ${context ? `Context: ${context}` : ""}
 
-Requirements:
-- Be conversational and friendly
-- Provide specific, actionable information
-- Ask clarifying questions if needed
-- Be concise but informative
-- Don't use JSON format - just provide the response text
+Be conversational and helpful. Provide only the response text, no JSON formatting.
 
-Current time: 2025-06-20 12:20:14 UTC
+Current time: 2025-06-20 12:23:20 UTC
 Current user: ayush20244048
 
 Response:
@@ -413,61 +523,39 @@ Response:
 
   buildAnalysisPrompt(content, context = "") {
     return `
-Analyze the following content and return ONLY a valid JSON object:
+IMPORTANT: Respond with ONLY a valid JSON object. No markdown formatting.
 
-Content: ${content}
+Analyze this content: ${content}
 ${context ? `Context: ${context}` : ""}
 
-Return ONLY this JSON structure (no markdown, no explanations):
+Respond with this exact JSON structure:
+{"sentiment":"positive","confidence":0.85,"emotional_indicators":["happy"],"tone":"friendly","urgency_level":3,"key_topics":["help"],"satisfaction_indicators":{"positive":["good"],"negative":[]}}
 
-{
-  "sentiment": "positive|negative|neutral",
-  "confidence": 0.95,
-  "emotional_indicators": ["list", "of", "emotions"],
-  "tone": "formal|casual|urgent|friendly",
-  "urgency_level": 5,
-  "key_topics": ["main", "topics"],
-  "satisfaction_indicators": {
-    "positive": ["positive_words_found"],
-    "negative": ["negative_words_found"]
-  }
-}
-
-Current time: 2025-06-20 12:20:14 UTC
+Current time: 2025-06-20 12:23:20 UTC
 Current user: ayush20244048
+
+JSON Response:
     `;
   }
 
   buildEntityExtractionPrompt(text, context = "") {
     return `
-Extract entities from this text and return ONLY a valid JSON object:
+IMPORTANT: Respond with ONLY a valid JSON object. No markdown formatting.
 
-Text: "${text}"
+Extract entities from: "${text}"
 ${context ? `Context: ${context}` : ""}
 
-Return ONLY this JSON structure (no markdown, no explanations):
+Respond with this exact JSON structure:
+{"people":[],"places":["New York"],"organizations":[],"dates_times":["tomorrow"],"services":["dental"],"contact_info":{"phones":[],"emails":[]},"preferences":[],"amounts":[]}
 
-{
-  "people": ["names of people mentioned"],
-  "places": ["locations, addresses, cities"],
-  "organizations": ["companies, businesses"],
-  "dates_times": ["date and time mentions"],
-  "services": ["services or products mentioned"],
-  "contact_info": {
-    "phones": ["phone numbers"],
-    "emails": ["email addresses"]
-  },
-  "preferences": ["user preferences"],
-  "amounts": ["prices, quantities"]
-}
-
-Current time: 2025-06-20 12:20:14 UTC
+Current time: 2025-06-20 12:23:20 UTC
 Current user: ayush20244048
+
+JSON Response:
     `;
   }
 
   estimateTokens(text) {
-    // Rough estimation: 1 token ≈ 4 characters
     return Math.ceil((text || "").length / 4);
   }
 }
