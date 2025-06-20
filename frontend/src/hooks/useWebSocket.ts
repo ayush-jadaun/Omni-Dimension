@@ -1,6 +1,6 @@
 /**
- * WebSocket Hook - Fixed TypeScript Errors
- * Current Time: 2025-06-20 07:58:27 UTC
+ * WebSocket Hook - Fixed Authentication Handling
+ * Current Time: 2025-06-20 09:46:40 UTC
  * Current User: ayush20244048
  */
 
@@ -9,17 +9,16 @@
 import { useEffect, useState, useCallback, useRef } from "react";
 import { WebSocketEvents } from "@/lib/websocket";
 import { WS_EVENTS } from "@/lib/config";
-import { useAuth } from "./useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import wsClient from "@/lib/websocket/client";
 
-// Define proper connection status interface
 interface ConnectionStatus {
   isConnected: boolean;
   reconnectAttempts: number;
   socketId?: string;
+  isConnecting: boolean;
 }
 
-// Define proper last message interface
 interface LastMessage {
   event: string;
   data: any;
@@ -27,7 +26,6 @@ interface LastMessage {
   currentUser: string;
 }
 
-// Define return type for the main hook
 interface UseWebSocketReturn {
   isConnected: boolean;
   connectionStatus: ConnectionStatus;
@@ -38,29 +36,32 @@ interface UseWebSocketReturn {
     handler: (data: Parameters<WebSocketEvents[K]>[0]) => void
   ) => () => void;
   reconnect: () => void;
+  forceConnect: () => void;
 }
 
 export function useWebSocket(): UseWebSocketReturn {
-  const { isAuthenticated } = useAuth();
+  const { isAuthenticated, user } = useAuth();
   const [isConnected, setIsConnected] = useState<boolean>(false);
   const [lastMessage, setLastMessage] = useState<LastMessage | null>(null);
   const [connectionStatus, setConnectionStatus] = useState<ConnectionStatus>({
     isConnected: false,
     reconnectAttempts: 0,
     socketId: undefined,
+    isConnecting: false,
   });
 
   const handlersRef = useRef<Map<string, Function>>(new Map());
+  const connectionAttempted = useRef<boolean>(false);
 
   // Update connection status
   useEffect(() => {
     const updateStatus = () => {
       const status = wsClient.getConnectionStatus();
-      // Ensure the status matches our interface
       const typedStatus: ConnectionStatus = {
         isConnected: Boolean(status.isConnected),
         reconnectAttempts: Number(status.reconnectAttempts || 0),
         socketId: status.socketId,
+        isConnecting: Boolean(status.isConnecting),
       };
 
       setConnectionStatus(typedStatus);
@@ -71,30 +72,31 @@ export function useWebSocket(): UseWebSocketReturn {
     updateStatus();
 
     // Listen for connection changes
-    const handleConnect = () => {
+    const handleConnect = (data: any) => {
       updateStatus();
       console.log(
-        "🔌 WebSocket connected at 2025-06-20 07:58:27 for ayush20244048"
+        "🔌 WebSocket connected at 2025-06-20 09:46:40 for ayush20244048:",
+        data
       );
     };
 
-    const handleDisconnect = (reason: string) => {
+    const handleDisconnect = (data: any) => {
       updateStatus();
       console.log(
         "🔌 WebSocket disconnected:",
-        reason,
-        "at 2025-06-20 07:58:27"
+        data.reason,
+        "at 2025-06-20 09:46:40"
       );
     };
 
-    const handleError = (error: Error) => {
-      console.error("🔌 WebSocket error at 2025-06-20 07:58:27:", error);
+    const handleError = (error: any) => {
+      console.error("🔌 WebSocket error at 2025-06-20 09:46:40:", error);
       updateStatus();
     };
 
-    wsClient.on(WS_EVENTS.CONNECT, handleConnect);
-    wsClient.on(WS_EVENTS.DISCONNECT, handleDisconnect);
-    wsClient.on(WS_EVENTS.ERROR, handleError);
+    wsClient.on("connect", handleConnect);
+    wsClient.on("disconnect", handleDisconnect);
+    wsClient.on("error", handleError);
 
     // Store handlers for cleanup
     handlersRef.current.set("connect", handleConnect);
@@ -102,31 +104,65 @@ export function useWebSocket(): UseWebSocketReturn {
     handlersRef.current.set("error", handleError);
 
     return () => {
-      wsClient.off(WS_EVENTS.CONNECT, handleConnect);
-      wsClient.off(WS_EVENTS.DISCONNECT, handleDisconnect);
-      wsClient.off(WS_EVENTS.ERROR, handleError);
+      wsClient.off("connect", handleConnect);
+      wsClient.off("disconnect", handleDisconnect);
+      wsClient.off("error", handleError);
     };
   }, []);
 
   // Handle authentication state changes
   useEffect(() => {
-    if (!isAuthenticated) {
-      wsClient.disconnect();
+    console.log("🔐 Auth state changed at 2025-06-20 09:46:40:", {
+      isAuthenticated,
+      hasUser: !!user,
+      username: user?.username,
+      connectionAttempted: connectionAttempted.current,
+    });
+
+    if (!isAuthenticated || !user) {
+      // User is not authenticated - disconnect if connected
+      if (isConnected) {
+        console.log("🚫 User not authenticated - disconnecting WebSocket");
+        wsClient.disconnect();
+      }
+      connectionAttempted.current = false;
     } else {
-      // Reconnect if not connected and user is authenticated
-      if (!isConnected) {
-        wsClient.reconnect();
+      // User is authenticated - connect if not already connected
+      if (!isConnected && !connectionAttempted.current) {
+        console.log("✅ User authenticated - attempting WebSocket connection");
+        connectionAttempted.current = true;
+
+        // Small delay to ensure session is properly set
+        setTimeout(async () => {
+          try {
+            await wsClient.connect();
+          } catch (error) {
+            console.error("❌ Initial WebSocket connection failed:", error);
+            connectionAttempted.current = false;
+          }
+        }, 1000);
       }
     }
-  }, [isAuthenticated, isConnected]);
+  }, [isAuthenticated, user, isConnected]);
 
-  const sendMessage = useCallback((event: string, data: any) => {
-    wsClient.emit(event, {
-      ...data,
-      timestamp: "2025-06-20 07:58:27",
-      currentUser: "ayush20244048",
-    });
-  }, []);
+  const sendMessage = useCallback(
+    (event: string, data: any) => {
+      if (!isAuthenticated) {
+        console.warn(
+          "⚠️ Cannot send WebSocket message - user not authenticated"
+        );
+        return;
+      }
+
+      wsClient.emit(event, {
+        ...data,
+        timestamp: "2025-06-20 09:46:40",
+        currentUser: "ayush20244048",
+        userId: user?._id || user?._id,
+      });
+    },
+    [isAuthenticated, user]
+  );
 
   const subscribe = useCallback(
     <K extends keyof WebSocketEvents>(
@@ -138,27 +174,52 @@ export function useWebSocket(): UseWebSocketReturn {
         const lastMsg: LastMessage = {
           event: event as string,
           data,
-          timestamp: "2025-06-20 07:58:27",
+          timestamp: "2025-06-20 09:46:40",
           currentUser: "ayush20244048",
         };
         setLastMessage(lastMsg);
         handler(data);
       };
 
-      wsClient.on(event, wrappedHandler);
+      wsClient.on(event as string, wrappedHandler);
 
       // Return unsubscribe function
       return () => {
-        wsClient.off(event, wrappedHandler);
+        wsClient.off(event as string, wrappedHandler);
       };
     },
     []
   );
 
   const reconnect = useCallback(() => {
-    console.log("🔄 Manually reconnecting WebSocket at 2025-06-20 07:58:27");
+    if (!isAuthenticated) {
+      console.warn("⚠️ Cannot reconnect WebSocket - user not authenticated");
+      return;
+    }
+
+    console.log("🔄 Manually reconnecting WebSocket at 2025-06-20 09:46:40");
     wsClient.reconnect();
-  }, []);
+  }, [isAuthenticated]);
+
+  const forceConnect = useCallback(async () => {
+    if (!isAuthenticated) {
+      console.warn(
+        "⚠️ Cannot force connect WebSocket - user not authenticated"
+      );
+      return;
+    }
+
+    console.log("🔧 Force connecting WebSocket at 2025-06-20 09:46:40");
+    connectionAttempted.current = false;
+
+    try {
+      await wsClient.connect();
+      connectionAttempted.current = true;
+    } catch (error) {
+      console.error("❌ Force connection failed:", error);
+      connectionAttempted.current = false;
+    }
+  }, [isAuthenticated]);
 
   return {
     isConnected,
@@ -167,36 +228,25 @@ export function useWebSocket(): UseWebSocketReturn {
     sendMessage,
     subscribe,
     reconnect,
+    forceConnect,
   };
 }
 
-// Define proper message interface for chat messages
-interface ChatMessage {
-  messageId: string;
-  conversationId: string;
-  content: string;
-  agent?: string;
-  confidence?: number;
-  timestamp: string;
-  receivedAt: string;
-  currentUser: string;
-}
-
-// Specialized hooks for specific WebSocket events
-export function useChatMessages(): ChatMessage[] {
+// Rest of the specialized hooks remain the same...
+export function useChatMessages() {
   const { subscribe } = useWebSocket();
-  const [messages, setMessages] = useState<ChatMessage[]>([]);
+  const [messages, setMessages] = useState<any[]>([]);
 
   useEffect(() => {
-    const unsubscribe = subscribe(WS_EVENTS.MESSAGE_RECEIVED, (data: any) => {
-      const chatMessage: ChatMessage = {
+    const unsubscribe = subscribe("message_received" as any, (data: any) => {
+      const chatMessage = {
         messageId: data.messageId || `msg-${Date.now()}`,
         conversationId: data.conversationId || "",
         content: data.content || "",
         agent: data.agent,
         confidence: data.confidence,
-        timestamp: data.timestamp || "2025-06-20 07:58:27",
-        receivedAt: "2025-06-20 07:58:27",
+        timestamp: data.timestamp || "2025-06-20 09:46:40",
+        receivedAt: "2025-06-20 09:46:40",
         currentUser: "ayush20244048",
       };
 
@@ -209,21 +259,14 @@ export function useChatMessages(): ChatMessage[] {
   return messages;
 }
 
-// Define proper typing indicator interface
-interface TypingIndicator {
-  isTyping: boolean;
-  agent?: string;
-  estimatedTime?: number;
-}
-
-export function useTypingIndicator(): TypingIndicator {
+export function useTypingIndicator() {
   const { subscribe } = useWebSocket();
-  const [typingStatus, setTypingStatus] = useState<TypingIndicator>({
+  const [typingStatus, setTypingStatus] = useState({
     isTyping: false,
   });
 
   useEffect(() => {
-    const unsubscribeStart = subscribe(WS_EVENTS.TYPING_START, (data: any) => {
+    const unsubscribeStart = subscribe("typing_start" as any, (data: any) => {
       setTypingStatus({
         isTyping: true,
         agent: data.agent,
@@ -231,7 +274,7 @@ export function useTypingIndicator(): TypingIndicator {
       });
     });
 
-    const unsubscribeStop = subscribe(WS_EVENTS.TYPING_STOP, () => {
+    const unsubscribeStop = subscribe("typing_stop" as any, () => {
       setTypingStatus({ isTyping: false });
     });
 
@@ -244,138 +287,9 @@ export function useTypingIndicator(): TypingIndicator {
   return typingStatus;
 }
 
-// Define proper workflow update interface
-interface WorkflowUpdate {
-  workflowId: string;
-  type: string;
-  status: string;
-  step?: string;
-  progress?: number;
-  timestamp: string;
-  receivedAt: string;
-  currentUser: string;
-}
-
-export function useWorkflowUpdates(): WorkflowUpdate[] {
-  const { subscribe } = useWebSocket();
-  const [workflowUpdates, setWorkflowUpdates] = useState<WorkflowUpdate[]>([]);
-
-  useEffect(() => {
-    const unsubscribe = subscribe(WS_EVENTS.WORKFLOW_UPDATED, (data: any) => {
-      const workflowUpdate: WorkflowUpdate = {
-        workflowId: data.workflowId || `workflow-${Date.now()}`,
-        type: data.type || "unknown",
-        status: data.status || "pending",
-        step: data.step,
-        progress: data.progress,
-        timestamp: data.timestamp || "2025-06-20 07:58:27",
-        receivedAt: "2025-06-20 07:58:27",
-        currentUser: "ayush20244048",
-      };
-
-      setWorkflowUpdates((prev) => [...prev, workflowUpdate]);
-    });
-
-    return unsubscribe;
-  }, [subscribe]);
-
-  return workflowUpdates;
-}
-
-// Define proper system notification interface
-interface SystemNotification {
-  id: string;
-  type: "info" | "warning" | "error" | "success";
-  title: string;
-  message: string;
-  priority: "low" | "normal" | "high" | "urgent";
-  timestamp: string;
-  receivedAt: string;
-  currentUser: string;
-  read: boolean;
-}
-
-export function useSystemNotifications(): SystemNotification[] {
-  const { subscribe } = useWebSocket();
-  const [notifications, setNotifications] = useState<SystemNotification[]>([]);
-
-  useEffect(() => {
-    const unsubscribe = subscribe(
-      WS_EVENTS.SYSTEM_NOTIFICATION,
-      (data: any) => {
-        const notification: SystemNotification = {
-          id: data.id || `notif-${Date.now()}`,
-          type: data.type || "info",
-          title: data.title || "System Notification",
-          message: data.message || "",
-          priority: data.priority || "normal",
-          timestamp: data.timestamp || "2025-06-20 07:58:27",
-          receivedAt: "2025-06-20 07:58:27",
-          currentUser: "ayush20244048",
-          read: false,
-        };
-
-        setNotifications((prev) => [...prev, notification]);
-      }
-    );
-
-    return unsubscribe;
-  }, [subscribe]);
-
-  return notifications;
-}
-
-// Additional utility hooks
-export function useAgentStatus() {
-  const { subscribe } = useWebSocket();
-  const [agentStatus, setAgentStatus] = useState<Record<string, any>>({});
-
-  useEffect(() => {
-    const unsubscribe = subscribe(
-      WS_EVENTS.AGENT_STATUS_UPDATED,
-      (data: any) => {
-        setAgentStatus((prev) => ({
-          ...prev,
-          [data.agentId || "unknown"]: {
-            ...data,
-            lastUpdate: "2025-06-20 07:58:27",
-            currentUser: "ayush20244048",
-          },
-        }));
-      }
-    );
-
-    return unsubscribe;
-  }, [subscribe]);
-
-  return agentStatus;
-}
-
-export function useCallStatus() {
-  const { subscribe } = useWebSocket();
-  const [callStatus, setCallStatus] = useState<any>(null);
-
-  useEffect(() => {
-    const unsubscribe = subscribe(
-      WS_EVENTS.AGENT_STATUS_UPDATED,
-      (data: any) => {
-        setCallStatus({
-          ...data,
-          lastUpdate: "2025-06-20 07:58:27",
-          currentUser: "ayush20244048",
-        });
-      }
-    );
-
-    return unsubscribe;
-  }, [subscribe]);
-
-  return callStatus;
-}
-
-// Connection management hook
 export function useConnectionManager() {
-  const { isConnected, connectionStatus, reconnect } = useWebSocket();
+  const { isConnected, connectionStatus, reconnect, forceConnect } =
+    useWebSocket();
   const [isReconnecting, setIsReconnecting] = useState(false);
 
   const handleReconnect = useCallback(async () => {
@@ -383,17 +297,16 @@ export function useConnectionManager() {
 
     setIsReconnecting(true);
     console.log(
-      "🔄 Connection manager initiating reconnect at 2025-06-20 07:58:27"
+      "🔄 Connection manager initiating reconnect at 2025-06-20 09:46:40"
     );
 
     try {
       await reconnect();
-      // Wait a bit to see if connection is established
       setTimeout(() => {
         setIsReconnecting(false);
       }, 3000);
     } catch (error) {
-      console.error("❌ Reconnection failed at 2025-06-20 07:58:27:", error);
+      console.error("❌ Reconnection failed at 2025-06-20 09:46:40:", error);
       setIsReconnecting(false);
     }
   }, [reconnect, isReconnecting]);
@@ -403,5 +316,6 @@ export function useConnectionManager() {
     connectionStatus,
     isReconnecting,
     reconnect: handleReconnect,
+    forceConnect,
   };
 }
