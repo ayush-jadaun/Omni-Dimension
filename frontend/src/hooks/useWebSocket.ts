@@ -7,9 +7,10 @@
 "use client";
 
 import { useEffect, useState, useCallback, useRef } from "react";
-import { wsClient, WebSocketEvents } from "@/lib/websocket";
+import { WebSocketEvents } from "@/lib/websocket";
 import { WS_EVENTS } from "@/lib/config";
 import { useAuth } from "./useAuth";
+import wsClient from "@/lib/websocket/client";
 
 // Define proper connection status interface
 interface ConnectionStatus {

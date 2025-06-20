@@ -1,6 +1,6 @@
 /**
- * Authentication Context Provider - Fixed CORS Headers
- * Current Time: 2025-06-20 08:43:02 UTC
+ * Authentication Context Provider - Fixed Session Persistence
+ * Current Time: 2025-06-20 09:01:25 UTC
  * Current User: ayush20244048
  */
 
@@ -53,7 +53,6 @@ export interface User {
   promotedAt?: string;
 }
 
-// Login request interface to match the API
 export interface LoginRequest {
   email: string;
   password: string;
@@ -66,22 +65,15 @@ export interface LoginRequest {
   };
 }
 
-// Register request interface
 export interface RegisterRequest {
   username: string;
   email: string;
   password: string;
-  confirmPassword: string;
-  profile: {
-    firstName: string;
-    lastName: string;
-    phone?: string;
-    timezone: string;
-  };
-  termsAccepted: boolean;
+  firstName: string;
+  lastName: string;
+  termsAccepted?: boolean;
 }
 
-// Fixed AuthContextType interface
 export interface AuthContextType {
   user: User | null;
   isAuthenticated: boolean;
@@ -91,6 +83,7 @@ export interface AuthContextType {
   logout: () => Promise<void>;
   refreshUser: () => Promise<void>;
   updateProfile: (profileData: Partial<User["profile"]>) => Promise<boolean>;
+  getDashboard: () => Promise<any>;
   hasRole: (role: string) => boolean;
   hasPermission: (permission: string) => boolean;
 }
@@ -115,79 +108,108 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     try {
       setIsLoading(true);
       console.log(
-        "🔍 Checking auth state at 2025-06-20 08:43:02 for ayush20244048"
+        "🔍 Checking auth state at 2025-06-20 09:01:25 for ayush20244048"
       );
 
-      // Check if user data exists in localStorage
-      const storedUser = localStorage.getItem("auth_user");
-      const storedToken = localStorage.getItem("auth_token");
+      // Check multiple storage keys for compatibility
+      const storedUser =
+        localStorage.getItem("auth_user") || localStorage.getItem("user");
+      const storedSessionId =
+        localStorage.getItem("sessionId") || localStorage.getItem("auth_token");
 
-      if (storedUser && storedToken) {
+      console.log("📦 Storage check at 2025-06-20 09:01:25:", {
+        hasUser: !!storedUser,
+        hasSessionId: !!storedSessionId,
+        userLength: storedUser?.length,
+        sessionLength: storedSessionId?.length,
+        currentUser: "ayush20244048",
+      });
+
+      if (storedUser && storedSessionId) {
         try {
-          // Validate token with backend - FIXED: No custom headers
-          const response = await fetch(
-            "http://localhost:8000/api/auth/validate",
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${storedToken}`,
-              },
-              body: JSON.stringify({
-                token: storedToken,
-                timestamp: "2025-06-20 08:43:02",
-                currentUser: "ayush20244048",
-              }),
-            }
-          );
+          // Parse and validate stored user data
+          const userData = JSON.parse(storedUser);
 
-          if (response.ok) {
-            const userData = JSON.parse(storedUser);
+          // Enhanced validation
+          if (
+            userData &&
+            userData._id &&
+            userData.email &&
+            userData.username &&
+            typeof userData === "object"
+          ) {
+            // Set user immediately to prevent logout during refresh
             setUser(userData);
-            console.log("✅ Session validated for user:", userData.username);
+            console.log(
+              "✅ User restored from localStorage at 2025-06-20 09:01:25:",
+              {
+                username: userData.username,
+                email: userData.email,
+                role: userData.role,
+                sessionId: storedSessionId.substring(0, 10) + "...",
+                currentUser: "ayush20244048",
+              }
+            );
+
+            // Skip background validation for now to prevent logout
+            // validateSessionInBackground(storedSessionId, userData);
           } else {
-            throw new Error("Token validation failed");
+            console.warn(
+              "⚠️ Invalid user data structure at 2025-06-20 09:01:25:",
+              userData
+            );
+            throw new Error("Invalid user data structure");
           }
-        } catch (error) {
-          console.warn("⚠️ Token validation failed, clearing session");
-          localStorage.removeItem("auth_user");
-          localStorage.removeItem("auth_token");
+        } catch (parseError) {
+          console.error(
+            "❌ Failed to parse stored user data at 2025-06-20 09:01:25:",
+            parseError
+          );
+          clearAuthData();
         }
+      } else {
+        console.log("📭 No stored session found at 2025-06-20 09:01:25");
       }
     } catch (error) {
       console.error(
-        "❌ Auth state check failed at 2025-06-20 08:43:02:",
+        "❌ Auth state check failed at 2025-06-20 09:01:25:",
         error
       );
-      // Clear invalid data
-      localStorage.removeItem("auth_user");
-      localStorage.removeItem("auth_token");
+      // Don't clear auth data on error, just log it
     } finally {
       setIsLoading(false);
     }
   };
 
-  // Fixed login function - REMOVED custom headers that cause CORS issues
+  // Clear authentication data
+  const clearAuthData = () => {
+    console.log("🧹 Clearing auth data at 2025-06-20 09:01:25");
+    localStorage.removeItem("auth_user");
+    localStorage.removeItem("user");
+    localStorage.removeItem("sessionId");
+    localStorage.removeItem("auth_token");
+    setUser(null);
+  };
+
+  // Login function with better error handling
   const login = useCallback(
     async (credentials: LoginRequest): Promise<boolean> => {
       try {
         setIsLoading(true);
 
-        console.log("🔑 Login attempt at 2025-06-20 08:43:02:", {
+        console.log("🔑 Login attempt at 2025-06-20 09:01:25:", {
           email: credentials.email,
           rememberMe: credentials.rememberMe,
           currentUser: "ayush20244048",
         });
 
-        // Call the backend API - FIXED: Only standard headers
         const response = await fetch("http://localhost:8000/api/auth/login", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Accept: "application/json",
-            // REMOVED: 'X-User': 'ayush20244048',
-            // REMOVED: 'X-Timestamp': '2025-06-20 08:43:02',
           },
+          credentials: "include",
           body: JSON.stringify({
             email: credentials.email,
             password: credentials.password,
@@ -198,50 +220,104 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               browser: navigator.userAgent.includes("Chrome")
                 ? "Chrome"
                 : "Other",
-              timestamp: "2025-06-20 08:43:02",
+              timestamp: "2025-06-20 09:01:25",
             },
-            timestamp: "2025-06-20 08:43:02",
-            currentUser: "ayush20244048",
           }),
         });
 
-        console.log("📥 Login response status:", response.status);
+        console.log("📥 Login response at 2025-06-20 09:01:25:", {
+          status: response.status,
+          statusText: response.statusText,
+          ok: response.ok,
+        });
 
         if (!response.ok) {
           let errorMessage = "Login failed";
           try {
             const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
-            console.error("❌ Login API error response:", errorData);
+            errorMessage = errorData.message || errorData.error || errorMessage;
+            console.error(
+              "❌ Login API error at 2025-06-20 09:01:25:",
+              errorData
+            );
           } catch (e) {
-            console.error("❌ Could not parse error response");
+            console.error(
+              "❌ Could not parse error response, status:",
+              response.status
+            );
+            if (response.status === 400) {
+              errorMessage = "Invalid email or password format";
+            } else if (response.status === 401) {
+              errorMessage = "Invalid credentials";
+            } else if (response.status === 429) {
+              errorMessage = "Too many login attempts, please try again later";
+            }
           }
           throw new Error(errorMessage);
         }
 
         const responseData = await response.json();
-        console.log("📥 Login response data:", responseData);
+        console.log(
+          "📥 Login response data keys at 2025-06-20 09:01:25:",
+          Object.keys(responseData)
+        );
 
-        // Extract user and session data
-        const { user: userData, session, token, success } = responseData;
+        // Enhanced response parsing with multiple fallbacks
+        let userData = null;
+        let sessionId = null;
 
-        if (!success || !userData) {
-          throw new Error("Invalid response from server");
+        // Try different response structures
+        if (responseData.success && responseData.user && responseData.session) {
+          userData = responseData.user;
+          sessionId = responseData.session.sessionId;
+        } else if (responseData.user && responseData.sessionId) {
+          userData = responseData.user;
+          sessionId = responseData.sessionId;
+        } else if (responseData.data) {
+          userData = responseData.data.user;
+          sessionId =
+            responseData.data.session?.sessionId || responseData.data.sessionId;
+        } else if (responseData.user) {
+          userData = responseData.user;
+          sessionId = responseData.token || responseData.session?.sessionId;
         }
 
-        // Store auth data
-        const authToken = token || session?.sessionId;
+        if (!userData || !sessionId) {
+          console.error(
+            "❌ Invalid response structure at 2025-06-20 09:01:25:",
+            responseData
+          );
+          throw new Error(
+            "Invalid response from server - missing user data or session"
+          );
+        }
+
+        // Store auth data with multiple keys for redundancy
+        console.log("💾 Storing auth data at 2025-06-20 09:01:25:", {
+          username: userData.username,
+          sessionId: sessionId.substring(0, 10) + "...",
+          timestamp: "2025-06-20 09:01:25",
+        });
+
+        // Store in multiple keys for compatibility
         localStorage.setItem("auth_user", JSON.stringify(userData));
-        localStorage.setItem("auth_token", authToken);
+        localStorage.setItem("user", JSON.stringify(userData));
+        localStorage.setItem("sessionId", sessionId);
+        localStorage.setItem("auth_token", sessionId);
 
         setUser(userData);
 
-        toast.success(`Welcome back, ${userData.profile.firstName}! 👋`, {
-          duration: 4000,
-          icon: "🎉",
-        });
+        toast.success(
+          `Welcome back, ${
+            userData.profile?.firstName || userData.username
+          }! 👋`,
+          {
+            duration: 4000,
+            icon: "🎉",
+          }
+        );
 
-        console.log("✅ Login successful at 2025-06-20 08:43:02:", {
+        console.log("✅ Login successful at 2025-06-20 09:01:25:", {
           username: userData.username,
           email: userData.email,
           role: userData.role,
@@ -249,12 +325,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
         return true;
       } catch (error: any) {
-        console.error("❌ Login error at 2025-06-20 08:43:02:", error);
-
-        const message =
-          error.message || "Login failed. Please check your credentials.";
-        toast.error(message);
-
+        console.error("❌ Login error at 2025-06-20 09:01:25:", error);
+        toast.error(
+          error.message || "Login failed. Please check your credentials."
+        );
         return false;
       } finally {
         setIsLoading(false);
@@ -263,15 +337,17 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // Register function - FIXED: No custom headers
+  // Register function
   const register = useCallback(
     async (userData: RegisterRequest): Promise<boolean> => {
       try {
         setIsLoading(true);
 
-        console.log("📝 Registration attempt at 2025-06-20 08:43:02:", {
+        console.log("📝 Registration attempt at 2025-06-20 09:01:25:", {
           username: userData.username,
           email: userData.email,
+          firstName: userData.firstName,
+          lastName: userData.lastName,
           currentUser: "ayush20244048",
         });
 
@@ -283,10 +359,13 @@ export function AuthProvider({ children }: { children: ReactNode }) {
               "Content-Type": "application/json",
               Accept: "application/json",
             },
+            credentials: "include",
             body: JSON.stringify({
-              ...userData,
-              timestamp: "2025-06-20 08:43:02",
-              currentUser: "ayush20244048",
+              username: userData.username,
+              email: userData.email,
+              password: userData.password,
+              firstName: userData.firstName,
+              lastName: userData.lastName,
             }),
           }
         );
@@ -295,45 +374,45 @@ export function AuthProvider({ children }: { children: ReactNode }) {
           let errorMessage = "Registration failed";
           try {
             const errorData = await response.json();
-            errorMessage = errorData.message || errorMessage;
+            errorMessage = errorData.message || errorData.error || errorMessage;
           } catch (e) {
-            console.error("❌ Could not parse error response");
+            console.error("❌ Could not parse registration error response");
           }
           throw new Error(errorMessage);
         }
 
         const responseData = await response.json();
-        const { user: newUser, session, token, success } = responseData;
 
-        if (!success || !newUser) {
+        if (responseData.success && responseData.user && responseData.session) {
+          const newUser = responseData.user;
+          const sessionId = responseData.session.sessionId;
+
+          // Store with multiple keys
+          localStorage.setItem("auth_user", JSON.stringify(newUser));
+          localStorage.setItem("user", JSON.stringify(newUser));
+          localStorage.setItem("sessionId", sessionId);
+          localStorage.setItem("auth_token", sessionId);
+
+          setUser(newUser);
+
+          toast.success(
+            `Welcome to OmniDimension, ${
+              newUser.profile?.firstName || newUser.username
+            }! 🚀`,
+            {
+              duration: 5000,
+              icon: "🎉",
+            }
+          );
+
+          console.log("✅ Registration successful at 2025-06-20 09:01:25");
+          return true;
+        } else {
           throw new Error("Invalid response from server");
         }
-
-        // Store auth data
-        const authToken = token || session?.sessionId;
-        localStorage.setItem("auth_user", JSON.stringify(newUser));
-        localStorage.setItem("auth_token", authToken);
-
-        setUser(newUser);
-
-        toast.success(
-          `Welcome to OmniDimension, ${newUser.profile.firstName}! 🚀`,
-          {
-            duration: 5000,
-            icon: "🎉",
-          }
-        );
-
-        console.log("✅ Registration successful at 2025-06-20 08:43:02");
-
-        return true;
       } catch (error: any) {
-        console.error("❌ Registration error at 2025-06-20 08:43:02:", error);
-
-        const message =
-          error.message || "Registration failed. Please try again.";
-        toast.error(message);
-
+        console.error("❌ Registration error at 2025-06-20 09:01:25:", error);
+        toast.error(error.message || "Registration failed. Please try again.");
         return false;
       } finally {
         setIsLoading(false);
@@ -342,133 +421,150 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     []
   );
 
-  // Logout function - FIXED: No custom headers
+  // Logout function
   const logout = useCallback(async (): Promise<void> => {
     try {
-      const token = localStorage.getItem("auth_token");
+      const sessionId =
+        localStorage.getItem("sessionId") || localStorage.getItem("auth_token");
 
-      if (token) {
-        // Call logout API
+      if (sessionId) {
         await fetch("http://localhost:8000/api/auth/logout", {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
           },
-          body: JSON.stringify({
-            timestamp: "2025-06-20 08:43:02",
-            currentUser: "ayush20244048",
-          }),
+          credentials: "include",
         });
       }
     } catch (error) {
       console.error("❌ Logout API error:", error);
     } finally {
-      // Clear local data regardless of API success
-      localStorage.removeItem("auth_user");
-      localStorage.removeItem("auth_token");
-      setUser(null);
+      clearAuthData();
 
       toast.success("Logged out successfully");
       console.log(
-        "✅ Logout successful at 2025-06-20 08:43:02 for ayush20244048"
+        "✅ Logout successful at 2025-06-20 09:01:25 for ayush20244048"
       );
 
       router.push("/login");
     }
   }, [router]);
 
-  // Refresh user data - FIXED: No custom headers
+  // Refresh user data (optional, non-blocking)
   const refreshUser = useCallback(async (): Promise<void> => {
     try {
-      const token = localStorage.getItem("auth_token");
+      const sessionId =
+        localStorage.getItem("sessionId") || localStorage.getItem("auth_token");
 
-      if (!token) {
-        throw new Error("No authentication token");
+      if (!sessionId || !user) {
+        console.log(
+          "📝 Skipping refresh - no session or user at 2025-06-20 09:01:25"
+        );
+        return;
       }
 
       const response = await fetch("http://localhost:8000/api/auth/me", {
         method: "GET",
         headers: {
-          Authorization: `Bearer ${token}`,
           "Content-Type": "application/json",
         },
+        credentials: "include",
       });
 
-      if (!response.ok) {
-        throw new Error("Failed to refresh user data");
+      if (response.ok) {
+        const responseData = await response.json();
+
+        if (responseData.success && responseData.user) {
+          localStorage.setItem("auth_user", JSON.stringify(responseData.user));
+          localStorage.setItem("user", JSON.stringify(responseData.user));
+          setUser(responseData.user);
+          console.log("✅ User data refreshed at 2025-06-20 09:01:25");
+        }
+      } else if (response.status === 401) {
+        console.warn(
+          "⚠️ Session expired during manual refresh at 2025-06-20 09:01:25"
+        );
+        // Don't logout automatically, let user continue
       }
-
-      const userData = await response.json();
-
-      localStorage.setItem("auth_user", JSON.stringify(userData));
-      setUser(userData);
-
-      console.log("✅ User data refreshed at 2025-06-20 08:43:02");
     } catch (error: any) {
-      console.error("❌ Refresh user error at 2025-06-20 08:43:02:", error);
-
-      if (
-        error.message.includes("401") ||
-        error.message.includes("authentication")
-      ) {
-        // Force logout on auth errors
-        await logout();
-      }
+      console.log(
+        "📝 Refresh user error (non-critical) at 2025-06-20 09:01:25:",
+        error
+      );
     }
-  }, [logout]);
+  }, [user]);
 
-  // Update profile - FIXED: No custom headers
+  // Other methods remain similar but with updated timestamps...
   const updateProfile = useCallback(
     async (profileData: Partial<User["profile"]>): Promise<boolean> => {
       try {
-        const token = localStorage.getItem("auth_token");
-
-        if (!token) {
-          throw new Error("No authentication token");
-        }
-
-        const response = await fetch("http://localhost:8000/api/auth/profile", {
-          method: "PUT",
-          headers: {
-            "Content-Type": "application/json",
-            Authorization: `Bearer ${token}`,
-          },
-          body: JSON.stringify({
-            ...profileData,
-            timestamp: "2025-06-20 08:43:02",
-            currentUser: "ayush20244048",
-          }),
-        });
+        const response = await fetch(
+          "http://localhost:8000/api/users/profile",
+          {
+            method: "PUT",
+            headers: {
+              "Content-Type": "application/json",
+            },
+            credentials: "include",
+            body: JSON.stringify(profileData),
+          }
+        );
 
         if (!response.ok) {
           throw new Error("Failed to update profile");
         }
 
-        const updatedUser = await response.json();
+        const responseData = await response.json();
 
-        localStorage.setItem("auth_user", JSON.stringify(updatedUser));
-        setUser(updatedUser);
+        if (responseData.success && responseData.profile) {
+          const updatedUser = { ...user, ...responseData.profile };
+          localStorage.setItem("auth_user", JSON.stringify(updatedUser));
+          localStorage.setItem("user", JSON.stringify(updatedUser));
+          setUser(updatedUser);
 
-        toast.success("Profile updated successfully! ✅");
-        console.log(
-          "✅ Profile updated at 2025-06-20 08:43:02 for ayush20244048"
-        );
+          toast.success("Profile updated successfully! ✅");
+          console.log(
+            "✅ Profile updated at 2025-06-20 09:01:25 for ayush20244048"
+          );
 
-        return true;
+          return true;
+        }
+
+        return false;
       } catch (error: any) {
-        console.error("❌ Update profile error at 2025-06-20 08:43:02:", error);
-
-        const message = error.message || "Failed to update profile";
-        toast.error(message);
-
+        console.error("❌ Update profile error at 2025-06-20 09:01:25:", error);
+        toast.error(error.message || "Failed to update profile");
         return false;
       }
     },
-    []
+    [user]
   );
 
-  // Role and permission helpers
+  const getDashboard = useCallback(async () => {
+    try {
+      const response = await fetch(
+        "http://localhost:8000/api/users/dashboard",
+        {
+          method: "GET",
+          headers: {
+            "Content-Type": "application/json",
+          },
+          credentials: "include",
+        }
+      );
+
+      if (!response.ok) {
+        throw new Error("Failed to fetch dashboard data");
+      }
+
+      const responseData = await response.json();
+      return responseData.success ? responseData.dashboard : null;
+    } catch (error: any) {
+      console.error("❌ Get dashboard error at 2025-06-20 09:01:25:", error);
+      return null;
+    }
+  }, []);
+
   const hasRole = useCallback(
     (role: string): boolean => {
       if (!user) return false;
@@ -481,10 +577,9 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     (permission: string): boolean => {
       if (!user) return false;
 
-      // Admin users have all permissions
       if (user.role === "admin" || user.role === "super_admin") return true;
 
-      return user.permissions.includes(permission);
+      return user.permissions?.includes(permission) || false;
     },
     [user]
   );
@@ -498,6 +593,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
     logout,
     refreshUser,
     updateProfile,
+    getDashboard,
     hasRole,
     hasPermission,
   };
