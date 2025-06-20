@@ -9,6 +9,9 @@ services:
       - NODE_ENV=development
       - MONGODB_URI=mongodb://mongo:27017/omnidimension
       - REDIS_URL=redis://redis:6379
+      - OMNIDIMENSION_API_KEY=${OMNIDIMENSION_API_KEY}
+      - OMNIDIMENSION_API_URL=${OMNIDIMENSION_API_URL:-https://api.omnidimension.com/v1}
+      - GEMINI_API_KEY=${GEMINI_API_KEY}
     depends_on:
       - mongo
       - redis
