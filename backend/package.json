@@ -1,0 +1,121 @@
+{
+    "name": "omnidimension-multi-agent-system",
+    "version": "1.0.0",
+    "description": "Intelligent automation through multi-agent orchestration with voice calling capabilities",
+    "main": "app.js",
+    "type": "module",
+    "scripts": {
+        "start": "node app.js",
+        "dev": "nodemon app.js",
+        "build": "echo 'Building OmniDimension System...' && npm install",
+        "test": "npm run test:unit && npm run test:integration",
+        "test:unit": "jest --testPathPattern=tests/unit",
+        "test:integration": "jest --testPathPattern=tests/integration",
+        "test:watch": "jest --watch",
+        "lint": "eslint src/ --ext .js",
+        "lint:fix": "eslint src/ --ext .js --fix",
+        "setup": "npm install && npm run setup:db && npm run setup:env",
+        "setup:db": "node scripts/setup-database.js",
+        "setup:env": "cp .env.example .env && echo 'Please configure your .env file'",
+        "agents:start": "node scripts/start-agents.js",
+        "agents:stop": "node scripts/stop-agents.js",
+        "agents:status": "node scripts/agent-status.js",
+        "db:seed": "node scripts/seed-database.js",
+        "db:migrate": "node scripts/migrate-database.js",
+        "logs": "tail -f logs/omnidimension.log",
+        "health": "curl http://localhost:8000/health",
+        "docs": "jsdoc -c jsdoc.conf.json",
+        "docker:build": "docker build -t omnidimension:latest .",
+        "docker:run": "docker-compose up -d",
+        "docker:stop": "docker-compose down",
+        "clean": "rm -rf node_modules package-lock.json logs/*.log",
+        "backup": "node scripts/backup-system.js",
+        "restore": "node scripts/restore-system.js"
+    },
+    "keywords": [
+        "multi-agent",
+        "ai",
+        "automation",
+        "voice-calling",
+        "appointments",
+        "reservations",
+        "langchain",
+        "langgraph",
+        "omnidimension"
+    ],
+    "author": "OmniDimension Team",
+    "license": "MIT",
+    "engines": {
+        "node": ">=18.0.0",
+        "npm": ">=8.0.0"
+    },
+    "dependencies": {
+        "@langchain/core": "^0.3.0",
+        "@langchain/google-genai": "^0.1.0",
+        "@langchain/langgraph": "^0.2.0",
+        "@langchain/openai": "^0.3.0",
+        "axios": "^1.7.0",
+        "bcryptjs": "^2.4.3",
+        "compression": "^1.7.4",
+        "connect-redis": "^9.0.0",
+        "cookie-parser": "^1.4.6",
+        "cors": "^2.8.5",
+        "dotenv": "^16.5.0",
+        "express": "^4.21.0",
+        "express-rate-limit": "^7.4.0",
+        "express-session": "^1.18.1",
+        "helmet": "^8.0.0",
+        "ioredis": "^5.4.0",
+        "joi": "^17.13.3",
+        "jsonwebtoken": "^9.0.2",
+        "langchain": "^0.3.0",
+        "mongoose": "^8.8.0",
+        "nodemailer": "^6.9.0",
+        "rate-limit-redis": "^4.2.1",
+        "redis": "^5.5.6",
+        "twilio": "^5.3.0",
+        "uuid": "^11.0.0",
+        "winston": "^3.15.0",
+        "ws": "^8.18.0"
+    },
+    "devDependencies": {
+        "@types/jest": "^29.5.0",
+        "eslint": "^9.0.0",
+        "jest": "^29.7.0",
+        "jsdoc": "^4.0.0",
+        "nodemon": "^3.1.0",
+        "supertest": "^7.0.0"
+    },
+    "jest": {
+        "testEnvironment": "node",
+        "setupFilesAfterEnv": [
+            "<rootDir>/tests/setup.js"
+        ],
+        "testMatch": [
+            "<rootDir>/tests/**/*.test.js"
+        ],
+        "collectCoverageFrom": [
+            "src/**/*.js",
+            "!src/config/**",
+            "!src/**/*.test.js"
+        ]
+    },
+    "eslintConfig": {
+        "env": {
+            "node": true,
+            "es2022": true,
+            "jest": true
+        },
+        "extends": [
+            "eslint:recommended"
+        ],
+        "parserOptions": {
+            "ecmaVersion": 2022,
+            "sourceType": "module"
+        },
+        "rules": {
+            "no-unused-vars": "warn",
+            "no-console": "off"
+        }
+    }
+}
