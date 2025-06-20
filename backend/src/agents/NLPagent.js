@@ -245,30 +245,30 @@ Current User: ayush20244048
     }
 
     const analysisPrompt = `
-Analyze this user message and provide intent parsing results:
-
-User Message: "${text}"
-Context: ${JSON.stringify(context)}
-
-Respond with a JSON object containing:
-{
-  "intent": "book_appointment|find_restaurant|make_reservation|general_inquiry|modify_booking|cancel_booking",
-  "confidence": 0.95,
-  "entities": {
-    "service_type": "extracted service type",
-    "location": "extracted location",
-    "date_time": "extracted date/time",
-    "contact_info": {},
-    "preferences": {},
-    "party_size": "number",
-    "cuisine_type": "food preferences"
-  },
-  "workflow_type": "appointment|restaurant|general_query|custom",
-  "suggested_actions": ["action1", "action2"],
-  "context_updates": {}
-}
-
-Be thorough and accurate. Current time: 2025-06-20 12:11:52 UTC, User: ayush20244048
+  Analyze this user message and provide intent parsing results:
+  
+  User Message: "${text}"
+  Context: ${JSON.stringify(context)}
+  
+  Respond with a JSON object containing:
+  {
+    "intent": "book_appointment|find_restaurant|make_reservation|general_inquiry|modify_booking|cancel_booking",
+    "confidence": 0.95,
+    "entities": {
+      "service_type": "extracted service type",
+      "location": "extracted location",
+      "date_time": "extracted date/time",
+      "contact_info": {},
+      "preferences": {},
+      "party_size": "number",
+      "cuisine_type": "food preferences"
+    },
+    "workflow_type": "appointment|restaurant|general_query|custom",
+    "suggested_actions": ["action1", "action2"],
+    "context_updates": {}
+  }
+  
+  Be thorough and accurate. Current time: 2025-06-20 12:11:52 UTC, User: ayush20244048
     `;
 
     const analysisInput = JSON.stringify({
@@ -289,16 +289,82 @@ Be thorough and accurate. Current time: 2025-06-20 12:11:52 UTC, User: ayush2024
 
     let analysis;
     try {
-      // Try to parse the JSON response
-      const cleanResult = parsedResult.result
-        .replace(/```json\n?|\n?```/g, "")
-        .trim();
-      analysis = JSON.parse(cleanResult);
+      // FIXED: Handle both object and string responses
+      let rawResult = parsedResult.result;
+
+      logger.info(`🔍 Raw Gemini result at 2025-06-20 12:23:20:`, {
+        rawResult: rawResult,
+        type: typeof rawResult,
+        isObject: typeof rawResult === "object" && rawResult !== null,
+        currentUser: "ayush20244048",
+      });
+
+      // Check if result is already an object (parsed JSON)
+      if (typeof rawResult === "object" && rawResult !== null) {
+        // Result is already parsed - use it directly
+        analysis = rawResult;
+
+        logger.info(`✅ Using pre-parsed object at 2025-06-20 12:23:20:`, {
+          intent: analysis.intent,
+          confidence: analysis.confidence,
+          hasEntities: Object.keys(analysis.entities || {}).length > 0,
+          currentUser: "ayush20244048",
+        });
+      } else if (typeof rawResult === "string") {
+        // Result is a string - needs parsing
+        let cleanResult = rawResult;
+
+        // Remove markdown code blocks
+        cleanResult = cleanResult
+          .replace(/^```(?:json)?\s*\n?/gm, "") // Remove opening ```json
+          .replace(/\n?```\s*$/gm, "") // Remove closing ```
+          .trim();
+
+        // Additional cleanup for edge cases
+        if (cleanResult.startsWith("```") || cleanResult.endsWith("```")) {
+          cleanResult = cleanResult.replace(/```/g, "").trim();
+        }
+
+        // If still wrapped in backticks
+        cleanResult = cleanResult.replace(/^`+|`+$/g, "").trim();
+
+        logger.info(`🧹 Cleaning string result at 2025-06-20 12:23:20:`, {
+          originalLength: rawResult.length,
+          cleanedLength: cleanResult.length,
+          startsWithBrace: cleanResult.startsWith("{"),
+          endsWithBrace: cleanResult.endsWith("}"),
+          currentUser: "ayush20244048",
+        });
+
+        // Parse the cleaned string
+        analysis = JSON.parse(cleanResult);
+
+        logger.info(
+          `✅ Successfully parsed string JSON at 2025-06-20 12:23:20:`,
+          {
+            intent: analysis.intent,
+            confidence: analysis.confidence,
+            currentUser: "ayush20244048",
+          }
+        );
+      } else {
+        throw new Error(`Unexpected result type: ${typeof rawResult}`);
+      }
     } catch (parseError) {
-      logger.warn(
-        `⚠️ Failed to parse Gemini JSON response at 2025-06-20 12:11:52:`,
-        parseError.message
+      logger.error(
+        `❌ Failed to process Gemini response at 2025-06-20 12:23:20:`,
+        {
+          error: parseError.message,
+          resultType: typeof parsedResult.result,
+          resultPreview:
+            typeof parsedResult.result === "string"
+              ? parsedResult.result?.substring(0, 100)
+              : JSON.stringify(parsedResult.result)?.substring(0, 100),
+          currentUser: "ayush20244048",
+        }
       );
+
+      // Fallback to rule-based parsing
       return this.parseIntentFallback(text, context);
     }
 
@@ -386,30 +452,30 @@ Be thorough and accurate. Current time: 2025-06-20 12:11:52 UTC, User: ayush2024
     }
 
     const entityPrompt = `
-Extract entities from this text:
-
-Text: "${text}"
-Requested Entity Types: ${entityTypes.join(", ") || "all relevant entities"}
-Context: ${JSON.stringify(context)}
-
-Extract and return a JSON object with these entities:
-{
-  "service_type": "type of service mentioned",
-  "location": "location or address",
-  "date_time": "date, time, or when",
-  "contact_info": {
-    "name": "person name",
-    "phone": "phone number",
-    "email": "email address"
-  },
-  "preferences": "user preferences or requirements",
-  "party_size": "number of people",
-  "cuisine_type": "food type or dietary preferences",
-  "price_range": "budget or price level"
-}
-
-Only include entities that are clearly mentioned in the text.
-Current time: 2025-06-20 12:11:52 UTC, User: ayush20244048
+  Extract entities from this text:
+  
+  Text: "${text}"
+  Requested Entity Types: ${entityTypes.join(", ") || "all relevant entities"}
+  Context: ${JSON.stringify(context)}
+  
+  Extract and return a JSON object with these entities:
+  {
+    "service_type": "type of service mentioned",
+    "location": "location or address",
+    "date_time": "date, time, or when",
+    "contact_info": {
+      "name": "person name",
+      "phone": "phone number",
+      "email": "email address"
+    },
+    "preferences": "user preferences or requirements",
+    "party_size": "number of people",
+    "cuisine_type": "food type or dietary preferences",
+    "price_range": "budget or price level"
+  }
+  
+  Only include entities that are clearly mentioned in the text.
+  Current time: 2025-06-20 12:11:52 UTC, User: ayush20244048
     `;
 
     const extractionInput = JSON.stringify({
@@ -430,14 +496,42 @@ Current time: 2025-06-20 12:11:52 UTC, User: ayush20244048
 
     let entities;
     try {
-      const cleanResult = parsedResult.result
-        .replace(/```json\n?|\n?```/g, "")
-        .trim();
-      entities = JSON.parse(cleanResult);
+      // FIXED: Handle both object and string responses
+      let rawResult = parsedResult.result;
+
+      // Check if result is already an object (parsed JSON)
+      if (typeof rawResult === "object" && rawResult !== null) {
+        // Result is already parsed - use it directly
+        entities = rawResult;
+      } else if (typeof rawResult === "string") {
+        // Result is a string - needs parsing
+        let cleanResult = rawResult;
+
+        // Remove markdown code blocks
+        cleanResult = cleanResult
+          .replace(/^```(?:json)?\s*\n?/gm, "")
+          .replace(/\n?```\s*$/gm, "")
+          .trim();
+
+        if (cleanResult.startsWith("```") || cleanResult.endsWith("```")) {
+          cleanResult = cleanResult.replace(/```/g, "").trim();
+        }
+
+        cleanResult = cleanResult.replace(/^`+|`+$/g, "").trim();
+
+        // Parse the cleaned string
+        entities = JSON.parse(cleanResult);
+      } else {
+        throw new Error(`Unexpected result type: ${typeof rawResult}`);
+      }
     } catch (parseError) {
-      logger.warn(
-        `⚠️ Failed to parse Gemini entity JSON at 2025-06-20 12:11:52:`,
-        parseError.message
+      logger.error(
+        `❌ Failed to process entity extraction response at 2025-06-20 12:11:52:`,
+        {
+          error: parseError.message,
+          resultType: typeof parsedResult.result,
+          currentUser: "ayush20244048",
+        }
       );
       return this.extractEntitiesFallback(text, entityTypes);
     }
