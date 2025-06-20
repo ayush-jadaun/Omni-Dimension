@@ -1,5 +1,5 @@
 /**
- * Chat Interface Page - Fixed All Type Errors
+ * Chat Interface Page - Fixed New Chat Issue
  * Current Time: 2025-06-20 07:51:54 UTC
  * Current User: ayush20244048
  */
@@ -7,7 +7,7 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useAuth } from "@/hooks/useAuth";
+import { useAuth } from "@/contexts/AuthContext";
 import {
   useChatMessages,
   useTypingIndicator,
@@ -43,6 +43,8 @@ export default function ChatPage() {
   const [loading, setLoading] = useState(true);
   const [sending, setSending] = useState(false);
   const [sidebarOpen, setSidebarOpen] = useState(true);
+  // Add this state to track if user has started chatting
+  const [hasStartedChat, setHasStartedChat] = useState(false);
 
   // WebSocket message handling
   const wsMessages = useChatMessages();
@@ -82,6 +84,7 @@ export default function ChatPage() {
         if (activeResponse.success && activeResponse.conversation) {
           setCurrentConversation(activeResponse.conversation);
           setMessages(activeResponse.messages || []);
+          setHasStartedChat(true); // User has an active conversation
           console.log(
             `✅ Loaded active conversation: ${activeResponse.conversation.conversationId} at 2025-06-20 07:51:54`
           );
@@ -138,6 +141,8 @@ export default function ChatPage() {
 
     try {
       setSending(true);
+      // Mark that user has started chatting
+      setHasStartedChat(true);
 
       // Create optimistic message
       const optimisticMessage: Message = {
@@ -226,6 +231,7 @@ export default function ChatPage() {
     try {
       setCurrentConversation(null);
       setMessages([]);
+      setHasStartedChat(true); // This is the key fix - mark as started
       console.log(
         "🆕 Started new chat at 2025-06-20 07:51:54 for ayush20244048"
       );
@@ -242,6 +248,7 @@ export default function ChatPage() {
       if (response.success) {
         setCurrentConversation(response.conversation);
         setMessages(response.messages || []);
+        setHasStartedChat(true); // User selected a conversation
         console.log(
           `✅ Selected conversation: ${conversation.conversationId} at 2025-06-20 07:51:54`
         );
@@ -261,8 +268,8 @@ export default function ChatPage() {
     );
   }
 
-  // Welcome state for new users
-  const showWelcome = !currentConversation && messages.length === 0;
+  // Updated welcome condition - only show welcome if user hasn't started chatting
+  const showWelcome = !hasStartedChat;
 
   return (
     <div className="flex h-[calc(100vh-8rem)] bg-background">

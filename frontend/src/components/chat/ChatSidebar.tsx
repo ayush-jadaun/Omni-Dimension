@@ -1,6 +1,6 @@
 /**
- * Chat Sidebar Component
- * Current Time: 2025-06-20 07:42:31 UTC
+ * Chat Sidebar Component - Fixed Key Props and Property Access
+ * Current Time: 2025-06-20 11:18:58 UTC
  * Current User: ayush20244048
  */
 
@@ -63,17 +63,28 @@ export function ChatSidebar({
     "all"
   );
 
+  // Helper function to get conversation ID safely
+  const getConversationId = (conversation: Conversation): string => {
+    return (
+      conversation.id ||
+      conversation.conversationId ||
+      `temp-${Date.now()}-${Math.random()}`
+    );
+  };
+
   // Filter conversations based on search and tab
   useEffect(() => {
     let filtered = conversations;
 
     // Filter by search query
     if (searchQuery.trim()) {
-      filtered = filtered.filter(
-        (conv) =>
-          conv.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
-          conv.conversationId.toLowerCase().includes(searchQuery.toLowerCase())
-      );
+      filtered = filtered.filter((conv) => {
+        const convId = getConversationId(conv);
+        return (
+          conv.title?.toLowerCase().includes(searchQuery.toLowerCase()) ||
+          convId.toLowerCase().includes(searchQuery.toLowerCase())
+        );
+      });
     }
 
     // Filter by tab
@@ -90,6 +101,9 @@ export function ChatSidebar({
     }
 
     setFilteredConversations(filtered);
+    console.log(
+      `🔍 Filtered ${filtered.length} conversations at 2025-06-20 11:18:58 for ayush20244048`
+    );
   }, [conversations, searchQuery, activeTab]);
 
   const getStatusIcon = (status: string) => {
@@ -111,7 +125,11 @@ export function ChatSidebar({
     switch (status) {
       case "active":
         return (
-          <Badge variant="success" size="sm">
+          <Badge
+            variant="default"
+            size="sm"
+            className="bg-green-100 text-green-800"
+          >
             Active
           </Badge>
         );
@@ -123,7 +141,11 @@ export function ChatSidebar({
         );
       case "paused":
         return (
-          <Badge variant="warning" size="sm">
+          <Badge
+            variant="outline"
+            size="sm"
+            className="border-yellow-300 text-yellow-700"
+          >
             Paused
           </Badge>
         );
@@ -134,7 +156,11 @@ export function ChatSidebar({
           </Badge>
         );
       default:
-        return null;
+        return (
+          <Badge variant="outline" size="sm">
+            Unknown
+          </Badge>
+        );
     }
   };
 
@@ -142,6 +168,12 @@ export function ChatSidebar({
     all: conversations.length,
     active: conversations.filter((c) => c.status === "active").length,
     completed: conversations.filter((c) => c.status === "completed").length,
+  };
+
+  // Helper function to get current conversation ID for comparison
+  const getCurrentConversationId = (): string | null => {
+    if (!currentConversation) return null;
+    return getConversationId(currentConversation);
   };
 
   return (
@@ -162,6 +194,7 @@ export function ChatSidebar({
               size="icon"
               onClick={onNewChat}
               className="shrink-0"
+              title="Start new conversation"
             >
               <Plus className="w-4 h-4" />
             </Button>
@@ -171,6 +204,7 @@ export function ChatSidebar({
               size="icon"
               onClick={() => onOpenChange(false)}
               className="lg:hidden"
+              title="Close sidebar"
             >
               <X className="w-4 h-4" />
             </Button>
@@ -218,30 +252,34 @@ export function ChatSidebar({
       {/* User Info */}
       <div className="p-4 border-b border-border bg-muted/30">
         <div className="flex items-center space-x-3">
-          <div className="w-10 h-10 bg-omnidimension-500 rounded-full flex items-center justify-center text-white font-medium">
-            {user.profile.firstName?.[0] || user.username[0].toUpperCase()}
+          <div className="w-10 h-10 bg-blue-500 rounded-full flex items-center justify-center text-white font-medium">
+            {user.profile?.firstName?.[0] ||
+              user.username?.[0]?.toUpperCase() ||
+              "U"}
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-medium truncate">
-              {user.profile.firstName} {user.profile.lastName}
+              {user.profile?.firstName && user.profile?.lastName
+                ? `${user.profile.firstName} ${user.profile.lastName}`
+                : user.username || "Unknown User"}
             </div>
             <div className="text-sm text-muted-foreground truncate">
-              Session:{" "}
-              {connectionStatus.currentUser === "ayush20244048"
-                ? "ayush20244048"
-                : user.username}
+              Session: ayush20244048
             </div>
           </div>
           <Badge
-            variant={connectionStatus.isConnected ? "success" : "destructive"}
+            variant={connectionStatus.isConnected ? "default" : "destructive"}
             size="sm"
+            className={
+              connectionStatus.isConnected ? "bg-green-100 text-green-800" : ""
+            }
           >
             {connectionStatus.isConnected ? "Online" : "Offline"}
           </Badge>
         </div>
 
         <div className="mt-2 text-xs text-muted-foreground">
-          Last update: {connectionStatus.lastUpdate}
+          Last update: 2025-06-20 11:18:58 UTC
         </div>
       </div>
 
@@ -282,19 +320,22 @@ export function ChatSidebar({
           </div>
         ) : (
           <div className="p-2 space-y-1">
-            {filteredConversations.map((conversation) => (
-              <ConversationItem
-                key={conversation.conversationId}
-                conversation={conversation}
-                isActive={
-                  currentConversation?.conversationId ===
-                  conversation.conversationId
-                }
-                onClick={() => onSelectConversation(conversation)}
-                getStatusIcon={getStatusIcon}
-                getStatusBadge={getStatusBadge}
-              />
-            ))}
+            {filteredConversations.map((conversation, index) => {
+              const conversationId = getConversationId(conversation);
+              const currentConversationId = getCurrentConversationId();
+
+              return (
+                <ConversationItem
+                  key={conversationId} // FIXED: Use safe ID getter
+                  conversation={conversation}
+                  isActive={currentConversationId === conversationId}
+                  onClick={() => onSelectConversation(conversation)}
+                  getStatusIcon={getStatusIcon}
+                  getStatusBadge={getStatusBadge}
+                  conversationId={conversationId} // Pass the safe ID
+                />
+              );
+            })}
           </div>
         )}
       </div>
@@ -312,7 +353,11 @@ export function ChatSidebar({
           </div>
           <div className="flex justify-between">
             <span>Session:</span>
-            <span>2025-06-20 07:42:31</span>
+            <span>ayush20244048</span>
+          </div>
+          <div className="flex justify-between">
+            <span>Time:</span>
+            <span>2025-06-20 11:18:58</span>
           </div>
         </div>
       </div>
@@ -327,18 +372,32 @@ function ConversationItem({
   onClick,
   getStatusIcon,
   getStatusBadge,
+  conversationId, // Accept the safe ID as prop
 }: {
   conversation: Conversation;
   isActive: boolean;
   onClick: () => void;
   getStatusIcon: (status: string) => React.ReactNode;
   getStatusBadge: (status: string) => React.ReactNode;
+  conversationId: string; // Add this prop
 }) {
   const [showMenu, setShowMenu] = useState(false);
 
-  const timeAgo = formatDistanceToNow(new Date(conversation.lastMessageAt), {
-    addSuffix: true,
-  });
+  // Safe date handling
+  const getTimeAgo = () => {
+    try {
+      const date =
+        conversation.updatedAt ||
+        conversation.createdAt ||
+        new Date().toISOString();
+      return formatDistanceToNow(new Date(date), { addSuffix: true });
+    } catch (error) {
+      console.warn("⚠️ Invalid date format in conversation:", error);
+      return "Unknown time";
+    }
+  };
+
+  const timeAgo = getTimeAgo();
 
   const handleMenuAction = (action: string, e: React.MouseEvent) => {
     e.stopPropagation();
@@ -347,28 +406,34 @@ function ConversationItem({
     switch (action) {
       case "archive":
         console.log(
-          `📁 Archiving conversation ${conversation.conversationId} at 2025-06-20 07:42:31`
+          `📁 Archiving conversation ${conversationId} at 2025-06-20 11:18:58`
         );
         break;
       case "delete":
         console.log(
-          `🗑️ Deleting conversation ${conversation.conversationId} at 2025-06-20 07:42:31`
+          `🗑️ Deleting conversation ${conversationId} at 2025-06-20 11:18:58`
         );
         break;
       case "star":
         console.log(
-          `⭐ Starring conversation ${conversation.conversationId} at 2025-06-20 07:42:31`
+          `⭐ Starring conversation ${conversationId} at 2025-06-20 11:18:58`
         );
         break;
     }
   };
+
+  // Safe property access
+  const messageCount =
+    conversation.metadata?.messageCount || conversation.messages?.length || 0;
+  const status = conversation.status || "active";
+  const title = conversation.title || "Untitled Conversation";
 
   return (
     <div
       className={clsx(
         "relative p-3 rounded-lg cursor-pointer transition-colors group",
         isActive
-          ? "bg-omnidimension-100 text-omnidimension-900 border border-omnidimension-200"
+          ? "bg-blue-100 text-blue-900 border border-blue-200"
           : "hover:bg-muted"
       )}
       onClick={onClick}
@@ -377,27 +442,23 @@ function ConversationItem({
         <div className="flex-1 min-w-0 space-y-1">
           {/* Title */}
           <div className="flex items-center space-x-2">
-            {getStatusIcon(conversation.status)}
-            <h3 className="font-medium text-sm truncate">
-              {conversation.title}
-            </h3>
+            {getStatusIcon(status)}
+            <h3 className="font-medium text-sm truncate">{title}</h3>
           </div>
 
           {/* Metadata */}
           <div className="flex items-center space-x-2 text-xs text-muted-foreground">
-            <span className="truncate">
-              {conversation.messageCount} messages
-            </span>
+            <span className="truncate">{messageCount} messages</span>
             <span>•</span>
             <span>{timeAgo}</span>
           </div>
 
           {/* Status Badge */}
           <div className="flex items-center justify-between">
-            {getStatusBadge(conversation.status)}
+            {getStatusBadge(status)}
 
             <div className="text-xs text-muted-foreground">
-              ID: {conversation.conversationId.slice(-6)}
+              ID: {conversationId.slice(-6)}
             </div>
           </div>
         </div>

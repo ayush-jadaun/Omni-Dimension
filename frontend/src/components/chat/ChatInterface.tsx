@@ -308,7 +308,7 @@ export function ChatInterface({
             <span>Session: ayush20244048</span>
             <span>•</span>
             <span>Time: 2025-06-20 07:39:46 UTC</span>
-            {currentConversation && (
+            {currentConversation?.conversationId && (
               <>
                 <span>•</span>
                 <span>ID: {currentConversation.conversationId.slice(-8)}</span>

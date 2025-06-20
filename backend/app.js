@@ -50,6 +50,10 @@ import { initializeAgents, getSystemHealth } from './src/agents/index.js';
 // Utilities
 import { logger } from './src/utils/logger.js';
 
+//cors
+
+import {corsConfig, corsPreflightHandler} from './src/middleware/cors.js';
+
 // Get current directory for ES modules
 const __filename = fileURLToPath(import.meta.url);
 const __dirname = dirname(__filename);
@@ -167,13 +171,32 @@ class OmniDimensionApp {
       },
     }));
     
-    // CORS configuration
-    this.app.use(cors({
-      origin: process.env.FRONTEND_URL || 'http://localhost:3000',
-      credentials: true,
-      methods: ['GET', 'POST', 'PUT', 'DELETE', 'OPTIONS'],
-      allowedHeaders: ['Content-Type', 'Authorization', 'x-session-id']
-    }));
+    this.app.use(cors(corsConfig));
+
+    // Additional manual CORS headers for extra safety
+    this.app.use((req, res, next) => {
+      const origin = req.headers.origin;
+      if (origin && corsConfig.origin) {
+        res.header("Access-Control-Allow-Origin", origin);
+      }
+      res.header("Access-Control-Allow-Credentials", "true");
+      res.header(
+        "Access-Control-Allow-Methods",
+        "GET,POST,PUT,DELETE,PATCH,OPTIONS"
+      );
+      res.header(
+        "Access-Control-Allow-Headers",
+        "Origin,X-Requested-With,Content-Type,Accept,Authorization,Cache-Control," +
+          "X-Session-ID,x-session-id,X-User-ID,x-user-id,x-user,X-User," +
+          "X-Request-ID,x-request-id,X-API-Version,x-api-version,X-API-Key,x-api-key," +
+          "X-Timestamp,x-timestamp,X-Client-Version,x-client-version, x-build"
+      );
+
+      console.log(
+        `🌐 CORS headers set for ${req.method} ${req.path} at 2025-06-20 10:50:09`
+      );
+      next();
+    });
     
     // Compression
     this.app.use(compression());

@@ -1,5 +1,5 @@
 /**
- * Base API Configuration and Types
+ * Fixed Base API Configuration and Types with Proper Session Management
  * Current Time: 2025-06-20 07:56:07 UTC
  * Current User: ayush20244048
  */
@@ -37,38 +37,106 @@ export const API_CONFIG = {
   BUILD_TIME: "2025-06-20 07:56:07",
 } as const;
 
-// API Headers Helper
+// Session Management Helper
+class SessionManager {
+  private static instance: SessionManager;
+
+  static getInstance(): SessionManager {
+    if (!SessionManager.instance) {
+      SessionManager.instance = new SessionManager();
+    }
+    return SessionManager.instance;
+  }
+
+  // Get session token from various sources
+  getSessionToken(): string | null {
+    if (typeof window === "undefined") return null;
+
+    // Try different storage keys that might contain the session
+    const possibleKeys = ["sessionId", "auth_token", "token"];
+
+    for (const key of possibleKeys) {
+      const token = localStorage.getItem(key);
+      if (token && token.trim()) {
+        return token.trim();
+      }
+    }
+
+    return null;
+  }
+
+  // Check if user is authenticated
+  isAuthenticated(): boolean {
+    if (typeof window === "undefined") return false;
+
+    const token = this.getSessionToken();
+    const user =
+      localStorage.getItem("auth_user") || localStorage.getItem("user");
+
+    return !!(token && user);
+  }
+
+  // Clear all session data
+  clearSession(): void {
+    if (typeof window === "undefined") return;
+
+    const keysToRemove = [
+      "sessionId",
+      "auth_token",
+      "token",
+      "auth_user",
+      "user",
+    ];
+
+    keysToRemove.forEach((key) => localStorage.removeItem(key));
+  }
+}
+
+// API Headers Helper with better session handling
 export function getApiHeaders(
   additionalHeaders: Record<string, string> = {}
 ): HeadersInit {
-  const sessionId =
-    typeof window !== "undefined" ? localStorage.getItem("sessionId") : null;
+  const sessionManager = SessionManager.getInstance();
+  const sessionToken = sessionManager.getSessionToken();
 
-  return {
+  const headers: HeadersInit = {
     "Content-Type": "application/json",
     Accept: "application/json",
     "X-API-Version": API_CONFIG.VERSION,
     "X-User": API_CONFIG.CURRENT_USER,
     "X-Timestamp": "2025-06-20 07:56:07",
     "X-Build": API_CONFIG.BUILD_TIME,
-    ...(sessionId && { Authorization: `Bearer ${sessionId}` }),
     ...additionalHeaders,
   };
+
+  // Add authorization header if session token exists
+  if (sessionToken) {
+    (headers as Record<string, string>)[
+      "Authorization"
+    ] = `Bearer ${sessionToken}`;
+  }
+
+  return headers;
 }
 
-// Base API Class
+// Enhanced Base API Class with better error handling
 export class BaseAPI {
   protected baseURL: string;
   protected currentUser: string;
-  protected defaultHeaders: HeadersInit;
+  protected sessionManager: SessionManager;
 
   constructor(baseURL?: string) {
     this.baseURL = baseURL || API_CONFIG.BASE_URL;
     this.currentUser = API_CONFIG.CURRENT_USER;
-    this.defaultHeaders = getApiHeaders();
+    this.sessionManager = SessionManager.getInstance();
   }
 
-  // Generic GET request
+  // Get default headers for each request
+  private getDefaultHeaders(): HeadersInit {
+    return getApiHeaders();
+  }
+
+  // Generic GET request with better session handling
   protected async get<T>(
     endpoint: string,
     params?: Record<string, string | number | boolean>,
@@ -83,28 +151,37 @@ export class BaseAPI {
     }
 
     try {
-      const response = await fetch(url.toString(), {
+      const requestConfig: RequestInit = {
         method: "GET",
-        headers: { ...this.defaultHeaders, ...headers },
+        headers: { ...this.getDefaultHeaders(), ...headers },
+        credentials: "include", // Always include cookies
+      };
+
+      console.log(`🌐 GET ${endpoint} at 2025-06-20 07:56:07`, {
+        url: url.toString(),
+        hasAuth: !!this.sessionManager.getSessionToken(),
+        headers: Object.keys(requestConfig.headers || {}),
       });
 
-      return await this.handleResponse<T>(response);
+      const response = await fetch(url.toString(), requestConfig);
+      return await this.handleResponse<T>(response, endpoint, "GET");
     } catch (error) {
       console.error(`❌ GET ${endpoint} failed at 2025-06-20 07:56:07:`, error);
       throw this.createApiError(error);
     }
   }
 
-  // Generic POST request
+  // Generic POST request with better session handling
   protected async post<T>(
     endpoint: string,
     data?: any,
     headers?: HeadersInit
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const requestConfig: RequestInit = {
         method: "POST",
-        headers: { ...this.defaultHeaders, ...headers },
+        headers: { ...this.getDefaultHeaders(), ...headers },
+        credentials: "include", // Always include cookies
         body: data
           ? JSON.stringify({
               ...data,
@@ -112,9 +189,15 @@ export class BaseAPI {
               currentUser: this.currentUser,
             })
           : undefined,
+      };
+
+      console.log(`🌐 POST ${endpoint} at 2025-06-20 07:56:07`, {
+        hasAuth: !!this.sessionManager.getSessionToken(),
+        hasData: !!data,
       });
 
-      return await this.handleResponse<T>(response);
+      const response = await fetch(`${this.baseURL}${endpoint}`, requestConfig);
+      return await this.handleResponse<T>(response, endpoint, "POST");
     } catch (error) {
       console.error(
         `❌ POST ${endpoint} failed at 2025-06-20 07:56:07:`,
@@ -131,9 +214,10 @@ export class BaseAPI {
     headers?: HeadersInit
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const requestConfig: RequestInit = {
         method: "PUT",
-        headers: { ...this.defaultHeaders, ...headers },
+        headers: { ...this.getDefaultHeaders(), ...headers },
+        credentials: "include",
         body: data
           ? JSON.stringify({
               ...data,
@@ -141,9 +225,10 @@ export class BaseAPI {
               currentUser: this.currentUser,
             })
           : undefined,
-      });
+      };
 
-      return await this.handleResponse<T>(response);
+      const response = await fetch(`${this.baseURL}${endpoint}`, requestConfig);
+      return await this.handleResponse<T>(response, endpoint, "PUT");
     } catch (error) {
       console.error(`❌ PUT ${endpoint} failed at 2025-06-20 07:56:07:`, error);
       throw this.createApiError(error);
@@ -156,12 +241,14 @@ export class BaseAPI {
     headers?: HeadersInit
   ): Promise<ApiResponse<T>> {
     try {
-      const response = await fetch(`${this.baseURL}${endpoint}`, {
+      const requestConfig: RequestInit = {
         method: "DELETE",
-        headers: { ...this.defaultHeaders, ...headers },
-      });
+        headers: { ...this.getDefaultHeaders(), ...headers },
+        credentials: "include",
+      };
 
-      return await this.handleResponse<T>(response);
+      const response = await fetch(`${this.baseURL}${endpoint}`, requestConfig);
+      return await this.handleResponse<T>(response, endpoint, "DELETE");
     } catch (error) {
       console.error(
         `❌ DELETE ${endpoint} failed at 2025-06-20 07:56:07:`,
@@ -171,8 +258,12 @@ export class BaseAPI {
     }
   }
 
-  // Handle API Response
-  private async handleResponse<T>(response: Response): Promise<ApiResponse<T>> {
+  // Enhanced response handler with better error management
+  private async handleResponse<T>(
+    response: Response,
+    endpoint: string,
+    method: string
+  ): Promise<ApiResponse<T>> {
     const contentType = response.headers.get("content-type");
 
     let data: any;
@@ -183,8 +274,20 @@ export class BaseAPI {
         data = await response.text();
       }
     } catch (error) {
+      console.error(
+        `❌ Failed to parse response from ${method} ${endpoint}:`,
+        error
+      );
       throw new Error("Failed to parse response data");
     }
+
+    // Log response details for debugging
+    console.log(`📥 ${method} ${endpoint} response:`, {
+      status: response.status,
+      ok: response.ok,
+      hasData: !!data,
+      dataKeys: typeof data === "object" ? Object.keys(data) : "not-object",
+    });
 
     if (!response.ok) {
       const apiError: ApiError = {
@@ -196,12 +299,21 @@ export class BaseAPI {
         status: response.status,
         details: data.details || data,
       };
+
+      // Handle specific error cases
+      if (response.status === 401) {
+        console.warn(
+          `⚠️ Unauthorized request to ${endpoint} - session may be expired`
+        );
+        // Don't auto-clear session here, let the auth context handle it
+      }
+
       throw apiError;
     }
 
     // Ensure response has proper structure
     const apiResponse: ApiResponse<T> = {
-      success: true,
+      success: data.success !== false, // Default to true if not specified
       data: data.data || data,
       message: data.message,
       timestamp: data.timestamp || "2025-06-20 07:56:07",
@@ -245,7 +357,12 @@ export class BaseAPI {
   ): Promise<T> {
     try {
       return await operation();
-    } catch (error) {
+    } catch (error: any) {
+      // Don't retry on authentication errors
+      if (error.status === 401 || error.code === "NO_SESSION") {
+        throw error;
+      }
+
       if (attempts > 1) {
         console.log(
           `🔄 Retrying operation, ${
@@ -265,9 +382,29 @@ export class BaseAPI {
   > {
     return this.get("/api/health");
   }
+
+  // Session validation endpoint
+  async validateSession(): Promise<
+    ApiResponse<{ valid: boolean; user?: any }>
+  > {
+    try {
+      return await this.get("/api/auth/me");
+    } catch (error: any) {
+      if (error.status === 401) {
+        // Session is invalid
+        return {
+          success: false,
+          data: { valid: false },
+          message: "Session invalid",
+          timestamp: "2025-06-20 07:56:07",
+        };
+      }
+      throw error;
+    }
+  }
 }
 
-// Request/Response interceptors
+// Enhanced Request/Response interceptors
 export class APIInterceptor {
   private static instance: APIInterceptor;
   private requestInterceptors: Array<(config: RequestInit) => RequestInit> = [];
@@ -309,32 +446,42 @@ export class APIInterceptor {
   }
 }
 
-// Default interceptors
+// Initialize default interceptors
 const interceptor = APIInterceptor.getInstance();
+const sessionManager = SessionManager.getInstance();
 
-// Add default request interceptor for authentication
+// Enhanced request interceptor for authentication
 interceptor.addRequestInterceptor((config: RequestInit) => {
-  const sessionId =
-    typeof window !== "undefined" ? localStorage.getItem("sessionId") : null;
+  const sessionToken = sessionManager.getSessionToken();
 
-  if (sessionId && config.headers) {
+  if (sessionToken && config.headers) {
     (config.headers as Record<string, string>)[
       "Authorization"
-    ] = `Bearer ${sessionId}`;
+    ] = `Bearer ${sessionToken}`;
   }
+
+  // Ensure credentials are always included
+  config.credentials = "include";
 
   return config;
 });
 
-// Add default response interceptor for logging
+// Enhanced response interceptor for logging and error handling
 interceptor.addResponseInterceptor((response: Response) => {
   if (!response.ok) {
-    console.error(
-      `❌ API Error ${response.status} at 2025-06-20 07:56:07:`,
-      response.statusText
-    );
+    console.error(`❌ API Error ${response.status} at 2025-06-20 07:56:07:`, {
+      url: response.url,
+      status: response.status,
+      statusText: response.statusText,
+    });
+
+    // If 401, the session might be expired
+    if (response.status === 401) {
+      console.warn("⚠️ Received 401 - session may be expired");
+      // Let the auth context handle session cleanup
+    }
   }
   return response;
 });
 
-export { interceptor as apiInterceptor };
+export { interceptor as apiInterceptor, SessionManager };

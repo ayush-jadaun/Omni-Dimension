@@ -76,7 +76,7 @@ export interface Message {
 }
 
 export interface Conversation {
-  _id: string;
+  id: string;
   conversationId: string;
   userId: string;
   sessionId: string;
