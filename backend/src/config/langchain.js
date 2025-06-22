@@ -1,11 +1,12 @@
 import { ChatGoogleGenerativeAI } from '@langchain/google-genai';
 import { GoogleGenerativeAI } from '@google/generative-ai';
 import { logger } from '../utils/logger.js';
+import dotenv from "dotenv"
 
+dotenv.config()
 // Validate API key
 const GEMINI_API_KEY =
-  process.env.GOOGLE_GEMINI_API_KEY ||
-  "AIzaSyC9fQJwRJ06tnCTvJzI67aJJD78w6_hOLE";
+  process.env.GOOGLE_GEMINI_API_KEY 
 if (!GEMINI_API_KEY) {
   throw new Error('GOOGLE_GEMINI_API_KEY is required');
 }

@@ -107,7 +107,7 @@ export function MessageBubble({
   return (
     <div
       className={clsx(
-        "flex gap-3 message-slide-in",
+        "flex gap-3 message-slide-in text-black" ,
         isUser ? "justify-end" : "justify-start"
       )}
     >
@@ -154,16 +154,16 @@ export function MessageBubble({
         {/* Message Bubble */}
         <div
           className={clsx(
-            "relative rounded-2xl px-4 py-3 max-w-full",
+            "relative rounded-2xl px-4 py-3 max-w-full border-black",
             isUser
-              ? "bg-omnidimension-500 text-white"
+              ? "bg-omnidimension-500 border-black"
               : isSystem
               ? "bg-muted text-muted-foreground border border-border"
               : "bg-card text-card-foreground border border-border shadow-sm"
           )}
         >
           {/* Message Text */}
-          <div className="prose prose-sm max-w-none dark:prose-invert">
+          <div className="prose prose-sm max-w-none dark:prose-invert text-black">
             <p className="whitespace-pre-wrap break-words m-0">
               {message.content}
             </p>

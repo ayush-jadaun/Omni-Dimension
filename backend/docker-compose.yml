@@ -11,7 +11,7 @@ services:
       - REDIS_URL=redis://redis:6379
       - OMNIDIMENSION_API_KEY=${OMNIDIMENSION_API_KEY}
       - OMNIDIMENSION_API_URL=${OMNIDIMENSION_API_URL:-https://api.omnidimension.com/v1}
-      - GEMINI_API_KEY=${GEMINI_API_KEY}
+      - GOOGLE_GEMINI_API_KEY=${GOOGLE_GEMINI_API_KEY}
     depends_on:
       - mongo
       - redis

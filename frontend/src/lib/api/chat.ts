@@ -89,7 +89,7 @@ class ChatAPI extends BaseAPI {
         `🆕 Starting conversation at 2025-06-20 07:56:07 by ayush20244048`
       );
 
-      const response = await this.post<ChatResponse>("/api/chat/message", {
+      const response = await this.post<ChatResponse>("/api/chat/conversations", {
         message,
         timestamp: "2025-06-20 07:56:07",
         currentUser: "ayush20244048",
