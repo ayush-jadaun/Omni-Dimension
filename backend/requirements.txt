@@ -1,0 +1,4 @@
+# OmniDimension Python SDK and dependencies
+omnidimension
+requests
+python-dotenv

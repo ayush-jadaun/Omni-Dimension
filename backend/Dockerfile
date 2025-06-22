@@ -1,7 +1,14 @@
 FROM node:18-alpine
 
+# Install Python and bypass pip restrictions
+RUN apk add --no-cache python3 py3-pip
+
 # Create app directory
 WORKDIR /app
+
+# Install Python dependencies with --break-system-packages
+COPY requirements.txt ./
+RUN pip3 install --break-system-packages -r requirements.txt
 
 # Install app dependencies
 COPY package*.json ./
